@@ -1,30 +1,71 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Shield, LayoutDashboard, Wrench, Package, BarChart3, AlertTriangle } from 'lucide-react';
+import { Shield, LayoutDashboard, Wrench, Package, BarChart3, AlertTriangle, User, Lock, LogOut, Key } from 'lucide-react';
 
 export default function HomePage() {
-  const [tokenSimulado, setTokenSimulado] = useState<string>('');
+  const [user, setUser] = useState<{ id: string; username: string; rol: string } | null>(null);
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [cargando, setCargando] = useState(false);
 
-  const simularLogin = (rol: 'administrador' | 'tecnico') => {
-    // Generar un payload simulado para desarrollo frontend local rápido
-    const dummyUser = {
-      id: rol === 'administrador' ? 'admin-uuid-1111' : 'tecnico-uuid-2222',
-      username: rol === 'administrador' ? 'admin' : 'tecnico1',
-      rol: rol
-    };
-    localStorage.setItem('user', JSON.stringify(dummyUser));
-    // Simulamos un token estático
-    localStorage.setItem('token', 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.dummy_token');
-    alert(`Sesión simulada iniciada como: ${rol.toUpperCase()}`);
-    window.location.reload();
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
+  useEffect(() => {
+    // Cargar sesión del almacenamiento local si ya existe
+    const userStr = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+    if (userStr && token) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch (e) {
+        localStorage.clear();
+      }
+    }
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setCargando(true);
+
+    if (!usernameInput || !passwordInput) {
+      setErrorMsg('Usuario y contraseña son requeridos.');
+      setCargando(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${backendUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: usernameInput, password: passwordInput })
+      });
+
+      const data = await res.json();
+      if (res.status === 200) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        setUser(data.user);
+      } else {
+        setErrorMsg(data.message || 'Credenciales inválidas.');
+      }
+    } catch (err: any) {
+      setErrorMsg('Error de conexión con el servidor.');
+      console.error(err);
+    } finally {
+      setCargando(false);
+    }
   };
 
   const limpiarSesion = () => {
     localStorage.clear();
+    setUser(null);
+    setUsernameInput('');
+    setPasswordInput('');
     alert('Sesión cerrada.');
-    window.location.reload();
   };
 
   return (
@@ -32,37 +73,102 @@ export default function HomePage() {
       {/* Hero Section con gradiente premium */}
       <section className="text-center relative py-12 rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-slate-800">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1),transparent)]" />
-        <div className="relative z-10 max-w-3xl mx-auto space-y-6 px-4">
+        <div className="relative z-10 max-w-4xl mx-auto space-y-6 px-4">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
             <Shield className="w-3.5 h-3.5" /> Portal de Modernización TIC - ITIL v4
           </span>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
+          <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
             Administración de Activos Informáticos
           </h1>
-          <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+          <p className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto">
             Plataforma centralizada para el triaje, inventariado dinámico en CMDB, liquidación de repuestos y regularización técnica ante Contraloría.
           </p>
 
-          <div className="flex justify-center gap-4 pt-4">
-            <button
-              onClick={() => simularLogin('administrador')}
-              className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 focus:ring-2 focus:ring-blue-500"
-            >
-              Simular Admin
-            </button>
-            <button
-              onClick={() => simularLogin('tecnico')}
-              className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 transition border border-slate-700 focus:ring-2 focus:ring-blue-500"
-            >
-              Simular Técnico
-            </button>
-            <button
-              onClick={limpiarSesion}
-              className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-red-950/40 hover:bg-red-900/40 text-red-400 transition border border-red-900/30 focus:ring-2 focus:ring-red-500"
-            >
-              Cerrar Sesión
-            </button>
-          </div>
+          {user ? (
+            /* Vista del usuario autenticado */
+            <div className="max-w-md mx-auto p-6 rounded-2xl bg-slate-900/80 border border-blue-900/30 space-y-4 shadow-xl">
+              <div className="flex items-center justify-center gap-2 text-green-400 text-sm font-semibold">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-ping" />
+                <span>SESIÓN ACTIVA</span>
+              </div>
+              <div className="text-white">
+                <p className="text-lg font-semibold">Bienvenido, <span className="text-blue-400">{user.username}</span></p>
+                <p className="text-xs text-slate-400 uppercase tracking-widest mt-1">Rol: {user.rol}</p>
+              </div>
+              <button
+                onClick={limpiarSesion}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold bg-red-950/60 hover:bg-red-900/40 text-red-400 border border-red-900/30 transition focus:ring-2 focus:ring-red-500"
+              >
+                <LogOut className="w-4 h-4" /> Cerrar Sesión Corporativa
+              </button>
+            </div>
+          ) : (
+            /* Formulario de Login Corporativo */
+            <form onSubmit={handleLogin} className="max-w-md mx-auto p-8 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-5 shadow-2xl text-left">
+              <div>
+                <h2 className="text-xl font-bold text-white text-center flex items-center justify-center gap-2">
+                  <Key className="w-5 h-5 text-blue-500" /> Ingreso al Sistema
+                </h2>
+                <p className="text-xs text-slate-500 text-center mt-1">Credenciales corporativas de la Municipalidad</p>
+              </div>
+
+              {errorMsg && (
+                <div className="p-3 text-xs font-semibold bg-red-950/40 border border-red-900/30 text-red-400 rounded-lg text-center">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {/* Input de Usuario */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="login-username" className="text-xs font-semibold text-slate-400">Usuario</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      id="login-username"
+                      type="text"
+                      placeholder="ej. admin o tecnico1"
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Input de Contraseña */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="login-password" className="text-xs font-semibold text-slate-400">Contraseña</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      id="login-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={cargando}
+                className="w-full py-2.5 rounded-lg text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white transition focus:ring-2 focus:ring-blue-500 shadow-lg shadow-blue-600/20 disabled:opacity-50"
+              >
+                {cargando ? 'Autenticando...' : 'Iniciar Sesión'}
+              </button>
+
+              <div className="text-[10px] text-slate-600 bg-slate-950/60 p-2.5 rounded-lg border border-slate-900/60">
+                <span className="font-semibold text-slate-500">Credenciales demo (sembradas en BD):</span>
+                <div className="mt-1 flex justify-between">
+                  <span>🔑 Admin: <span className="text-slate-400 font-mono">admin / admin123</span></span>
+                  <span>🔧 Técnico: <span className="text-slate-400 font-mono">tecnico1 / tecnico123</span></span>
+                </div>
+              </div>
+            </form>
+          )}
         </div>
       </section>
 
@@ -79,7 +185,7 @@ export default function HomePage() {
 
         <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-blue-500/30 transition backdrop-blur-sm">
           <div className="flex justify-between items-start text-slate-400">
-            <span className="text-sm font-medium">Comisiones de Viaje Activas</span>
+            <span className="text-sm font-medium">Comisiones Activas</span>
             <Wrench className="w-5 h-5 text-blue-500" />
           </div>
           <p className="text-3xl font-bold mt-2 text-white">4 Activas</p>
@@ -105,33 +211,46 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Accesos Directos a los Módulos de Flujo */}
-      <section className="space-y-6">
-        <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <LayoutDashboard className="w-6 h-6 text-blue-400" /> Módulos de Flujo Operativo
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Link href="/triaje" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
-            <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">1. Triaje Inbound</h3>
-            <p className="text-sm text-slate-400 mt-2">Búsqueda rápida en caché de activos, semáforo crítico automático y switch de contingencia.</p>
-          </Link>
+      {/* Accesos Directos a los Módulos de Flujo (Condicionados por RBAC) */}
+      {user && (
+        <section className="space-y-6">
+          <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <LayoutDashboard className="w-6 h-6 text-blue-400" /> Módulos de Flujo Operativo
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Módulo 1: Triaje Inbound (Acceso para ambos) */}
+            <Link href="/triaje" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">1. Triaje Inbound</h3>
+              <p className="text-sm text-slate-400 mt-2">Búsqueda rápida en caché de activos, semáforo crítico automático y switch de contingencia.</p>
+            </Link>
 
-          <Link href="/kanban" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
-            <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">2. Kanban de Tickets</h3>
-            <p className="text-sm text-slate-400 mt-2">Monitoreo y arrastre de solicitudes bajo los estados To Do, In Progress, En Tránsito a Taller y Done.</p>
-          </Link>
+            {/* Módulo 2: Kanban de Tickets (Acceso para ambos) */}
+            <Link href="/kanban" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">2. Kanban de Tickets</h3>
+              <p className="text-sm text-slate-400 mt-2">Monitoreo y arrastre de solicitudes bajo los estados To Do, In Progress, En Tránsito a Taller y Done.</p>
+            </Link>
 
-          <Link href="/custodia" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
-            <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">3. Custodia en Ruta</h3>
-            <p className="text-sm text-slate-400 mt-2">Control de repuestos retirados, cronómetro de Aging de 48 horas y middleware de bloqueo.</p>
-          </Link>
+            {/* Módulo 3: Custodia en Ruta (Acceso para ambos) */}
+            <Link href="/custodia" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">3. Custodia en Ruta</h3>
+              <p className="text-sm text-slate-400 mt-2">Control de repuestos retirados, cronómetro de Aging de 48 horas y middleware de bloqueo.</p>
+            </Link>
 
-          <Link href="/admin" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
-            <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">4. Administración</h3>
-            <p className="text-sm text-slate-400 mt-2">Carga masiva de compras, informes INF-BAJA/INF-RENOV, reuso de CPU y descarga Excel.</p>
-          </Link>
-        </div>
-      </section>
+            {/* Módulo 4: Administración (Solo Administrador - Control RBAC en Interfaz) */}
+            {user.rol === 'administrador' ? (
+              <Link href="/admin" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+                <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">4. Administración</h3>
+                <p className="text-sm text-slate-400 mt-2">Carga masiva de compras, informes INF-BAJA/INF-RENOV, reuso de CPU y descarga Excel.</p>
+              </Link>
+            ) : (
+              <div className="p-6 rounded-2xl bg-slate-950/20 border border-slate-900 opacity-40 cursor-not-allowed">
+                <h3 className="font-bold text-lg text-slate-500">4. Administración</h3>
+                <p className="text-sm text-slate-600 mt-2">Acceso restringido. Requiere privilegios de Administrador Patrimonial.</p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -33,6 +33,8 @@ export const typeDefs = gql`
     tecnico_username: String
     agencia_id: String!
     serie_activo: String
+    usuario_reporta: String
+    fecha_resolucion: String
     fecha_creacion: String!
   }
 
@@ -83,6 +85,8 @@ export const typeDefs = gql`
     checkAgingLogistico(tecnicoId: String!): Boolean!
     listInsumos: [InsumoEconomato!]!
     listActivosCMDB: [ActivoTIC!]!
+    countTicketsActivo(serie: String!): Int!
+    getHistorialActivo(serie: String!): [Ticket!]!
   }
 
   type Mutation {
@@ -93,6 +97,8 @@ export const typeDefs = gql`
       prioridad: String!
       agencia_id: String!
       serie_activo: String
+      usuario_reporta: String
+      status: String
       registro_manual_contingencia: Boolean!
       datos_contingencia_texto: String
     ): Ticket!

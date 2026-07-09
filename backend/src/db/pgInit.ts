@@ -39,8 +39,18 @@ export const initializePostgreSQL = async () => {
         tecnico_id UUID REFERENCES usuarios_sistema(id) ON DELETE SET NULL,
         agencia_id VARCHAR(100) NOT NULL,
         serie_activo VARCHAR(100) DEFAULT NULL,
+        usuario_reporta VARCHAR(100) DEFAULT NULL,
+        fecha_resolucion TIMESTAMP DEFAULT NULL,
         fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Ejecutar alteración para agregar columna si no existe (migración segura para producción)
+    await client.query(`
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS usuario_reporta VARCHAR(100) DEFAULT NULL;
+    `);
+    await client.query(`
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS fecha_resolucion TIMESTAMP DEFAULT NULL;
     `);
 
     // 4. Tabla de Informes de Baja y Renovación

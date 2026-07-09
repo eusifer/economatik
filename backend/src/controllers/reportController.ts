@@ -45,13 +45,15 @@ export const downloadReportController = async (req: AuthenticatedRequest, res: R
       { header: 'TICKET KEY', key: 'key', width: 15 },
       { header: 'CANAL ORIGEN', key: 'canal_origen', width: 15 },
       { header: 'RESUMEN', key: 'resumen', width: 30 },
-      { header: 'ESTADO', key: 'status', width: 20 },
+      { header: 'ESTADO', key: 'status', width: 15 },
       { header: 'PRIORIDAD', key: 'prioridad', width: 12 },
-      { header: 'NOMBRE', key: 'nombre', width: 20 },
-      { header: 'APELLIDOS', key: 'apellidos', width: 25 },
-      { header: 'AGENCIA SEDE', key: 'agencia_id', width: 25 },
-      { header: 'SERIE ACTIVO', key: 'serie_activo', width: 20 },
-      { header: 'FECHA CREACION', key: 'fecha_creacion', width: 22 }
+      { header: 'TECNICO NOMBRE', key: 'nombre', width: 20 },
+      { header: 'TECNICO APELLIDOS', key: 'apellidos', width: 20 },
+      { header: 'USUARIO REPORTANTE', key: 'usuario_reporta', width: 25 },
+      { header: 'AGENCIA SEDE', key: 'agencia_id', width: 20 },
+      { header: 'SERIE ACTIVO', key: 'serie_activo', width: 15 },
+      { header: 'FECHA CREACION', key: 'fecha_creacion', width: 22 },
+      { header: 'FECHA RESOLUCION', key: 'fecha_resolucion', width: 22 }
     ];
 
     // Formatear cabecera (Azul Celeste Institucional, Negrita, Texto en Mayúsculas)
@@ -86,9 +88,11 @@ export const downloadReportController = async (req: AuthenticatedRequest, res: R
         prioridad: String(row.prioridad).toUpperCase(),
         nombre: nombre,
         apellidos: apellidos,
+        usuario_reporta: row.usuario_reporta ? String(row.usuario_reporta).toUpperCase() : 'SIN REGISTRAR',
         agencia_id: String(row.agencia_id).toUpperCase(),
         serie_activo: row.serie_activo ? String(row.serie_activo).toUpperCase() : 'N/A',
-        fecha_creacion: row.fecha_creacion ? row.fecha_creacion.toISOString().substring(0, 19).replace('T', ' ').toUpperCase() : 'N/A'
+        fecha_creacion: row.fecha_creacion ? row.fecha_creacion.toISOString().substring(0, 19).replace('T', ' ').toUpperCase() : 'N/A',
+        fecha_resolucion: row.fecha_resolucion ? row.fecha_resolucion.toISOString().substring(0, 19).replace('T', ' ').toUpperCase() : 'N/A'
       };
 
       worksheet.addRow(rowData);

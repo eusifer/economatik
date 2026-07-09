@@ -62,6 +62,43 @@ export const resolvers = {
       }
     },
 
+    countTicketsActivo: async (_parent: any, { serie }: { serie: string }) => {
+      try {
+        const result = await pgPool.query(
+          'SELECT COUNT(*) FROM tickets WHERE serie_activo = $1;',
+          [serie]
+        );
+        return parseInt(result.rows[0].count);
+      } catch (err: any) {
+        logger.error('Error en countTicketsActivo:', { error: err.message });
+        return 0;
+      }
+    },
+
+    getHistorialActivo: async (_parent: any, { serie }: { serie: string }) => {
+      try {
+        const result = await pgPool.query(`
+          SELECT t.*, u.username as tecnico_username
+          FROM tickets t
+          LEFT JOIN usuarios_sistema u ON t.tecnico_id = u.id
+          WHERE t.serie_activo = $1
+          ORDER BY t.fecha_creacion DESC;
+        `, [serie]);
+
+        return result.rows.map(row => ({
+          ...row,
+          datos_contingencia_cifrados: row.datos_contingencia_cifrados 
+            ? decryptAES(row.datos_contingencia_cifrados) 
+            : null,
+          fecha_creacion: row.fecha_creacion.toISOString(),
+          fecha_resolucion: row.fecha_resolucion ? row.fecha_resolucion.toISOString() : null,
+        }));
+      } catch (err: any) {
+        logger.error('Error en getHistorialActivo:', { error: err.message });
+        return [];
+      }
+    },
+
     listTickets: async (_parent: any, { status, tecnicoId }: { status?: string; tecnicoId?: string }) => {
       try {
         let query = `
@@ -91,6 +128,7 @@ export const resolvers = {
             ? decryptAES(row.datos_contingencia_cifrados) 
             : null,
           fecha_creacion: row.fecha_creacion.toISOString(),
+          fecha_resolucion: row.fecha_resolucion ? row.fecha_resolucion.toISOString() : null,
         }));
       } catch (err: any) {
         logger.error('Error al listar tickets:', { error: err.message });
@@ -170,6 +208,8 @@ export const resolvers = {
         prioridad: string;
         agencia_id: string;
         serie_activo?: string;
+        usuario_reporta?: string;
+        status?: string;
         registro_manual_contingencia: boolean;
         datos_contingencia_texto?: string;
       },
@@ -189,20 +229,26 @@ export const resolvers = {
         }
       }
 
+      const ticketStatus = args.status || 'To Do';
+      const isResolved = ticketStatus === 'Done';
+
       const result = await pgPool.query(`
         INSERT INTO tickets 
-        (canal_origen, resumen, sintoma_descripcion, status, prioridad, registro_manual_contingencia, datos_contingencia_cifrados, agencia_id, serie_activo)
-        VALUES ($1, $2, $3, 'To Do', $4, $5, $6, $7, $8)
+        (canal_origen, resumen, sintoma_descripcion, status, prioridad, registro_manual_contingencia, datos_contingencia_cifrados, agencia_id, serie_activo, usuario_reporta, fecha_resolucion)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *;
       `, [
         args.canal_origen,
         args.resumen,
         args.sintoma_descripcion,
+        ticketStatus,
         args.prioridad,
         args.registro_manual_contingencia,
         datosCifrados,
         args.agencia_id,
-        args.serie_activo || null
+        args.serie_activo || null,
+        args.usuario_reporta || null,
+        isResolved ? new Date() : null
       ]);
 
       const ticket = result.rows[0];
@@ -210,6 +256,7 @@ export const resolvers = {
         ...ticket,
         datos_contingencia_cifrados: args.datos_contingencia_texto || null,
         fecha_creacion: ticket.fecha_creacion.toISOString(),
+        fecha_resolucion: ticket.fecha_resolucion ? ticket.fecha_resolucion.toISOString() : null,
       };
     },
 
@@ -223,10 +270,13 @@ export const resolvers = {
         throw new Error('Estado inválido. Debe ser uno de: To Do, In Progress, En Tránsito a Taller, Done.');
       }
 
-      const result = await pgPool.query(
-        'UPDATE tickets SET status = $1 WHERE id = $2 RETURNING *;',
-        [status, ticketId]
-      );
+      let queryStr = 'UPDATE tickets SET status = $1 WHERE id = $2 RETURNING *;';
+      const params = [status, ticketId];
+      if (status === 'Done') {
+        queryStr = 'UPDATE tickets SET status = $1, fecha_resolucion = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *;';
+      }
+
+      const result = await pgPool.query(queryStr, params);
 
       if (result.rowCount === 0) {
         throw new Error('El ticket no existe.');
@@ -237,6 +287,7 @@ export const resolvers = {
       return {
         ...ticket,
         fecha_creacion: ticket.fecha_creacion.toISOString(),
+        fecha_resolucion: ticket.fecha_resolucion ? ticket.fecha_resolucion.toISOString() : null,
       };
     },
 
@@ -261,6 +312,7 @@ export const resolvers = {
       return {
         ...ticket,
         fecha_creacion: ticket.fecha_creacion.toISOString(),
+        fecha_resolucion: ticket.fecha_resolucion ? ticket.fecha_resolucion.toISOString() : null,
       };
     },
 

@@ -1,0 +1,95 @@
+import { pgPool } from '../config/db';
+import bcrypt from 'bcryptjs';
+
+export const initializePostgreSQL = async () => {
+  const client = await pgPool.connect();
+  try {
+    console.log('Iniciando inicialización de tablas de PostgreSQL...');
+    
+    // Habilitar extensión pgcrypto para UUIDs si no está habilitada
+    await client.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto";`);
+
+    // 1. Tabla de Usuarios
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS usuarios_sistema (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        username VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        rol VARCHAR(20) NOT NULL CHECK (rol IN ('administrador', 'tecnico'))
+      );
+    `);
+
+    // 2. Secuencia para llave incremental de tickets
+    await client.query(`
+      CREATE SEQUENCE IF NOT EXISTS ticket_key_seq START WITH 1001;
+    `);
+
+    // 3. Tabla de Tickets
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        key VARCHAR(50) UNIQUE NOT NULL DEFAULT ('HD-' || nextval('ticket_key_seq')),
+        canal_origen VARCHAR(20) NOT NULL CHECK (canal_origen IN ('Llamada', 'Plataforma')),
+        resumen VARCHAR(255) NOT NULL,
+        sintoma_descripcion TEXT NOT NULL,
+        status VARCHAR(30) NOT NULL CHECK (status IN ('To Do', 'In Progress', 'En Tránsito a Taller', 'Done')),
+        prioridad VARCHAR(20) NOT NULL CHECK (prioridad IN ('Baja', 'Media', 'Alta')),
+        registro_manual_contingencia BOOLEAN DEFAULT FALSE,
+        datos_contingencia_cifrados BYTEA DEFAULT NULL,
+        tecnico_id UUID REFERENCES usuarios_sistema(id) ON DELETE SET NULL,
+        agencia_id VARCHAR(100) NOT NULL,
+        serie_activo VARCHAR(100) DEFAULT NULL,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 4. Tabla de Informes de Baja y Renovación
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS informes_baja_renovacion (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        numero_informe VARCHAR(50) UNIQUE NOT NULL,
+        tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('Baja', 'Renovacion')),
+        diagnostico_tecnico TEXT NOT NULL,
+        sustento_logistico TEXT NOT NULL,
+        administrador_id UUID REFERENCES usuarios_sistema(id) ON DELETE SET NULL,
+        fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 5. Tabla de Registro de Custodia de Repuestos (para control de comisiones y Aging)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS custodia_repuestos (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tecnico_id UUID NOT NULL REFERENCES usuarios_sistema(id) ON DELETE CASCADE,
+        ean_codigo VARCHAR(50) NOT NULL,
+        estado VARCHAR(20) NOT NULL CHECK (estado IN ('En Ruta', 'Consumido', 'Devuelto')),
+        fecha_retiro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        fecha_cierre_comision TIMESTAMP NULL,
+        fecha_regularizacion TIMESTAMP NULL,
+        comision_activa BOOLEAN DEFAULT TRUE
+      );
+    `);
+
+    // Insertar usuarios semilla por defecto si no existen
+    const userCount = await client.query('SELECT COUNT(*) FROM usuarios_sistema;');
+    if (parseInt(userCount.rows[0].count) === 0) {
+      const adminHash = await bcrypt.hash('admin123', 10);
+      const techHash = await bcrypt.hash('tecnico123', 10);
+
+      await client.query(`
+        INSERT INTO usuarios_sistema (username, password_hash, rol) VALUES
+        ('admin', $1, 'administrador'),
+        ('tecnico1', $2, 'tecnico');
+      `, [adminHash, techHash]);
+      
+      console.log('Usuarios semilla insertados: admin (admin123), tecnico1 (tecnico123)');
+    }
+
+    console.log('Inicialización de PostgreSQL finalizada con éxito.');
+  } catch (error) {
+    console.error('Error al inicializar PostgreSQL:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};

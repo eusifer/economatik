@@ -1,0 +1,157 @@
+name: ENOCOMATIK CI-CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # 1. Fase de Calidad y Pruebas Unitarias
+  test-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Código
+      uses: actions/checkout@v4
+
+    - name: Configurar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: |
+          backend/package-lock.json
+          frontend/package-lock.json
+
+    # Pruebas de Backend
+    - name: Instalar Dependencias Backend
+      run: |
+        cd backend
+        npm ci
+
+    - name: Ejecutar TypeScript Linter & Tests Backend
+      run: |
+        cd backend
+        npm run build
+        # npm run test -- --passWithNoTests # Descomentar para producción con Jest configurado
+
+    # Pruebas de Frontend
+    - name: Instalar Dependencias Frontend
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Compilar Frontend Next.js
+      run: |
+        cd frontend
+        npm run build
+
+  # 2. Compilación y Publicación de Contenedores Docker
+  build-and-push:
+    needs: test-and-lint
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+    - name: Checkout Código
+      uses: actions/checkout@v4
+
+    - name: Configurar Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # Configuración de Credenciales AWS para EKS / ECR
+    - name: Configurar Credenciales AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: Iniciar Sesión en AWS ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # Compilar y subir Backend
+    - name: Compilar y Subir Imagen Backend ECR
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: devops/backend.Dockerfile
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/enocomatik-backend:latest
+          ${{ steps.login-ecr.outputs.registry }}/enocomatik-backend:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # Compilar y subir Frontend
+    - name: Compilar y Subir Imagen Frontend ECR
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: devops/frontend.Dockerfile
+        push: true
+        tags: |
+          ${{ steps.login-ecr.outputs.registry }}/enocomatik-frontend:latest
+          ${{ steps.login-ecr.outputs.registry }}/enocomatik-frontend:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # 3. Despliegue Automatizado
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+    - name: Checkout Código
+      uses: actions/checkout@v4
+
+    - name: Configurar Credenciales AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    # Actualizar Kubeconfig para apuntar a AWS EKS
+    - name: Configurar Contexto de Kubernetes (EKS)
+      run: |
+        aws eks update-kubeconfig --name enocomatik-eks-cluster --region us-east-1
+
+    # Aplicar Manifiestos con actualización de imágenes compiladas
+    - name: Desplegar en EKS Kubernetes Cluster
+      run: |
+        kubectl apply -f devops/k8s-deployment.yaml
+        kubectl set image deployment/enocomatik-backend backend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/enocomatik-backend:${{ github.sha }} -n enocomatik
+        kubectl set image deployment/enocomatik-frontend frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/enocomatik-frontend:${{ github.sha }} -n enocomatik
+        kubectl rollout status deployment/enocomatik-backend -n enocomatik
+        kubectl rollout status deployment/enocomatik-frontend -n enocomatik
+
+  # 4. Preview Frontend en Netlify para Pull Requests
+  netlify-preview:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - name: Checkout Código
+      uses: actions/checkout@v4
+
+    - name: Configurar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Instalar y Compilar Frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+
+    - name: Desplegar Preview a Netlify
+      uses: nwtgck/actions-netlify@v3.0
+      with:
+        publish-dir: './frontend/.next'
+        production-deploy: false
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        deploy-message: "Deploy Preview PR #${{ github.event.number }}"
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

@@ -58,7 +58,7 @@ export const downloadReportController = async (req: AuthenticatedRequest, res: R
 
     // Formatear cabecera (Azul Celeste Institucional, Negrita, Texto en Mayúsculas)
     const headerRow = worksheet.getRow(1);
-    headerRow.eachCell((cell) => {
+    headerRow.eachCell((cell: any) => {
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
@@ -73,7 +73,7 @@ export const downloadReportController = async (req: AuthenticatedRequest, res: R
     });
 
     // Agregar filas y forzar valores en MAYÚSCULAS
-    result.rows.forEach((row) => {
+    result.rows.forEach((row: any) => {
       // Separar nombre y apellidos del username del técnico asignado
       const username = row.tecnico_username || 'SIN ASIGNAR';
       const nameParts = username.trim().split(' ');
@@ -99,9 +99,9 @@ export const downloadReportController = async (req: AuthenticatedRequest, res: R
     });
 
     // Forzar bordes y fuente general a todas las celdas de datos
-    worksheet.eachRow((row, rowNumber) => {
+    worksheet.eachRow((row: any, rowNumber: number) => {
       if (rowNumber > 1) {
-        row.eachCell((cell) => {
+        row.eachCell((cell: any) => {
           cell.font = { name: 'Segoe UI', size: 10 };
           cell.alignment = { vertical: 'middle' };
         });

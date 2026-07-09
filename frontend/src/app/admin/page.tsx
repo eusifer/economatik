@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Download, RefreshCw, Cpu, Server, Laptop, Archive, TrendingUp, BarChart2, FileSpreadsheet, Plus, FileCode } from 'lucide-react';
+import { Upload, FileText, Download, RefreshCw, Cpu, Server, Laptop, Archive, TrendingUp, BarChart2, FileSpreadsheet, Plus, FileCode, Save } from 'lucide-react';
+
 
 export default function AdminPage() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
@@ -321,6 +322,8 @@ export default function AdminPage() {
     } catch (err: any) {
       alert(`Error al registrar: ${err.message}`);
     }
+  };
+
   const consultarKardexActivo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!serieKardexBusqueda.trim()) return;

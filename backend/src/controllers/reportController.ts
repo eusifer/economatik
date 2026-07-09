@@ -7,12 +7,12 @@ import { logger, getClientIp } from '../utils/logger';
 /**
  * Genera y descarga el reporte de productividad mensual en formato Excel (.xlsx) usando ExcelJS.
  */
-export const downloadReportController = async (req: AuthenticatedRequest, res: Response) => {
+export const downloadReportController = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const ip = getClientIp(req);
   const user = req.user;
 
   if (!user) {
-    return res.status(401).json({ message: 'No autorizado.' });
+    return void res.status(401).json({ message: 'No autorizado.' });
   }
 
   try {
@@ -123,6 +123,6 @@ export const downloadReportController = async (req: AuthenticatedRequest, res: R
     res.end();
   } catch (error: any) {
     logger.error('Error al generar el reporte Excel mensual:', { error: error.message });
-    return res.status(500).json({ message: 'Error interno al generar reporte.' });
+    return void res.status(500).json({ message: 'Error interno al generar reporte.' });
   }
 };

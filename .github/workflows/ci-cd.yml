@@ -1,5 +1,15 @@
 name: ENOCOMATIK CI-CD Pipeline
 
+# ──────────────────────────────────────────────────────────────────────────────
+# PLATAFORMA DE DESPLIEGUE ACTIVA: Render (backend) + Vercel (frontend)
+# ──────────────────────────────────────────────────────────────────────────────
+# NOTA ARQUITECTURAL: La arquitectura objetivo de producción institucional es
+# AWS EKS + ECR con orquestación Kubernetes (documentada en
+# manual_operacion_despliegue_enocomatik.md, sección 3.3).
+# Para la etapa académica/demo se utiliza Render + Vercel por ser gratuitos
+# y no requerir tarjeta de crédito activa.
+# ──────────────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [ main, develop ]
@@ -7,14 +17,17 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  # 1. Fase de Calidad y Pruebas Unitarias
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 1: Calidad — TypeScript Linting y Compilación (todo push/PR)
+  # ════════════════════════════════════════════════════════════════════════════
   test-and-lint:
+    name: "🔎 Calidad y Compilación"
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Código
       uses: actions/checkout@v4
 
-    - name: Configurar Node.js
+    - name: Configurar Node.js 20
       uses: actions/setup-node@v4
       with:
         node-version: '20'
@@ -23,31 +36,28 @@ jobs:
           backend/package-lock.json
           frontend/package-lock.json
 
-    # Pruebas de Backend
     - name: Instalar Dependencias Backend
-      run: |
-        cd backend
-        npm ci
+      run: cd backend && npm ci
 
-    - name: Ejecutar TypeScript Linter & Tests Backend
-      run: |
-        cd backend
-        npm run build
-        # npm run test -- --passWithNoTests # Descomentar para producción con Jest configurado
+    - name: Compilar TypeScript Backend (Linting implícito)
+      env:
+        # Variable mínima requerida para que crypto.ts no falle en fail-fast
+        AES_KEY: ${{ secrets.AES_KEY }}
+      run: cd backend && npm run build
 
-    # Pruebas de Frontend
     - name: Instalar Dependencias Frontend
-      run: |
-        cd frontend
-        npm ci
+      run: cd frontend && npm ci
 
     - name: Compilar Frontend Next.js
-      run: |
-        cd frontend
-        npm run build
+      run: cd frontend && npm run build
 
-  # 2. Compilación y Publicación de Contenedores Docker
-  build-and-push:
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 2: Validación Docker (build local sin push a ningún registry)
+  #   — Solo verifica que los Dockerfiles compilan correctamente
+  #   — No requiere cuenta AWS ni credenciales de cloud
+  # ════════════════════════════════════════════════════════════════════════════
+  docker-build-validate:
+    name: "🐳 Validación Docker Build"
     needs: test-and-lint
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -58,76 +68,82 @@ jobs:
     - name: Configurar Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # Configuración de Credenciales AWS para EKS / ECR
-    - name: Configurar Credenciales AWS
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-
-    - name: Iniciar Sesión en AWS ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-
-    # Compilar y subir Backend
-    - name: Compilar y Subir Imagen Backend ECR
+    - name: Compilar imagen Backend (sin push)
       uses: docker/build-push-action@v5
       with:
         context: .
         file: devops/backend.Dockerfile
-        push: true
-        tags: |
-          ${{ steps.login-ecr.outputs.registry }}/enocomatik-backend:latest
-          ${{ steps.login-ecr.outputs.registry }}/enocomatik-backend:${{ github.sha }}
+        push: false
+        tags: enocomatik-backend:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    # Compilar y subir Frontend
-    - name: Compilar y Subir Imagen Frontend ECR
+    - name: Compilar imagen Frontend (sin push)
       uses: docker/build-push-action@v5
       with:
         context: .
         file: devops/frontend.Dockerfile
-        push: true
-        tags: |
-          ${{ steps.login-ecr.outputs.registry }}/enocomatik-frontend:latest
-          ${{ steps.login-ecr.outputs.registry }}/enocomatik-frontend:${{ github.sha }}
+        push: false
+        tags: enocomatik-frontend:${{ github.sha }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-  # 3. Despliegue Automatizado
-  deploy:
-    needs: build-and-push
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 3: Despliegue en Render (Backend — push a main)
+  #   — Dispara el Deploy Hook de Render via HTTPS POST
+  #   — No requiere CLI, Docker push, ni credenciales cloud
+  # ════════════════════════════════════════════════════════════════════════════
+  deploy-backend-render:
+    name: "🚀 Deploy Backend → Render"
+    needs: docker-build-validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+    - name: Disparar Deploy Hook en Render
+      run: |
+        curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          --max-time 30 \
+          --retry 3 \
+          --retry-delay 5
+        echo "✅ Deploy hook enviado a Render. El despliegue se ejecutará en la plataforma."
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 4: Despliegue en Vercel (Frontend — push a main)
+  #   — Usa la CLI oficial de Vercel con token de autenticación
+  # ════════════════════════════════════════════════════════════════════════════
+  deploy-frontend-vercel:
+    name: "🌐 Deploy Frontend → Vercel"
+    needs: docker-build-validate
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
     - name: Checkout Código
       uses: actions/checkout@v4
 
-    - name: Configurar Credenciales AWS
-      uses: aws-actions/configure-aws-credentials@v4
+    - name: Configurar Node.js 20
+      uses: actions/setup-node@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+        node-version: '20'
 
-    # Actualizar Kubeconfig para apuntar a AWS EKS
-    - name: Configurar Contexto de Kubernetes (EKS)
+    - name: Instalar Vercel CLI
+      run: npm install -g vercel
+
+    - name: Desplegar en Vercel (Producción)
       run: |
-        aws eks update-kubeconfig --name enocomatik-eks-cluster --region us-east-1
+        cd frontend
+        vercel --prod --yes \
+          --token=${{ secrets.VERCEL_TOKEN }} \
+          --scope=${{ secrets.VERCEL_ORG_ID }}
+      env:
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
 
-    # Aplicar Manifiestos con actualización de imágenes compiladas
-    - name: Desplegar en EKS Kubernetes Cluster
-      run: |
-        kubectl apply -f devops/k8s-deployment.yaml
-        kubectl set image deployment/enocomatik-backend backend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/enocomatik-backend:${{ github.sha }} -n enocomatik
-        kubectl set image deployment/enocomatik-frontend frontend=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/enocomatik-frontend:${{ github.sha }} -n enocomatik
-        kubectl rollout status deployment/enocomatik-backend -n enocomatik
-        kubectl rollout status deployment/enocomatik-frontend -n enocomatik
-
-  # 4. Preview Frontend en Netlify para Pull Requests
+  # ════════════════════════════════════════════════════════════════════════════
+  # JOB 5: Preview Frontend en Netlify para Pull Requests
+  # ════════════════════════════════════════════════════════════════════════════
   netlify-preview:
+    name: "👁️ Preview Frontend → Netlify"
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:

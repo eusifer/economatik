@@ -1,5 +1,6 @@
 import { pgPool } from '../config/db';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export const initializePostgreSQL = async () => {
   const client = await pgPool.connect();
@@ -83,16 +84,38 @@ export const initializePostgreSQL = async () => {
     // Insertar usuarios semilla por defecto si no existen
     const userCount = await client.query('SELECT COUNT(*) FROM usuarios_sistema;');
     if (parseInt(userCount.rows[0].count) === 0) {
-      const adminHash = await bcrypt.hash('admin123', 10);
-      const techHash = await bcrypt.hash('tecnico123', 10);
+      // Las contraseñas se leen desde variables de entorno.
+      // Si no están definidas se generan aleatoriamente (fail-safe para primer despliegue).
+      // NUNCA se hardcodean en el código fuente.
+      const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? crypto.randomBytes(16).toString('hex');
+      const tecnicoPassword = process.env.SEED_TECNICO_PASSWORD ?? crypto.randomBytes(16).toString('hex');
+
+      const adminHash = await bcrypt.hash(adminPassword, 12);
+      const techHash = await bcrypt.hash(tecnicoPassword, 12);
 
       await client.query(`
         INSERT INTO usuarios_sistema (username, password_hash, rol) VALUES
         ('admin', $1, 'administrador'),
         ('tecnico1', $2, 'tecnico');
       `, [adminHash, techHash]);
-      
-      console.log('Usuarios semilla insertados: admin (admin123), tecnico1 (tecnico123)');
+
+      // Las contraseñas generadas se imprimen UNA SOLA VEZ para que el administrador
+      // las registre. Después de esto no se loguean de nuevo.
+      if (!process.env.SEED_ADMIN_PASSWORD || !process.env.SEED_TECNICO_PASSWORD) {
+        console.warn('\n╔══════════════════════════════════════════════════════╗');
+        console.warn('║  ⚠️  CREDENCIALES SEMILLA GENERADAS AUTOMÁTICAMENTE  ║');
+        console.warn('╠══════════════════════════════════════════════════════╣');
+        if (!process.env.SEED_ADMIN_PASSWORD) {
+          console.warn(`║  admin     → ${adminPassword.padEnd(38)}║`);
+        }
+        if (!process.env.SEED_TECNICO_PASSWORD) {
+          console.warn(`║  tecnico1  → ${tecnicoPassword.padEnd(38)}║`);
+        }
+        console.warn('║  Guárdalas en .env y elimina este log de producción. ║');
+        console.warn('╚══════════════════════════════════════════════════════╝\n');
+      } else {
+        console.log('Usuarios semilla insertados con credenciales de entorno.');
+      }
     }
 
     console.log('Inicialización de PostgreSQL finalizada con éxito.');

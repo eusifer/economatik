@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Link from 'next/link';
+import SessionBadge from '@/components/SessionBadge';
 
 export const metadata: Metadata = {
   title: 'ENOCOMATIK - Gestión de Activos TIC',
@@ -36,14 +37,9 @@ export default function RootLayout({
                 </Link>
               </nav>
             </div>
-            
+
             <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-xs text-slate-400">Rol Activo:</div>
-                <div className="text-sm font-semibold text-blue-400">
-                  Sesión Simulada
-                </div>
-              </div>
+              <SessionBadge />
             </div>
           </div>
         </header>

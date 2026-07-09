@@ -393,7 +393,7 @@ export const resolvers = {
       `, [tecnicoId]);
       
       logger.info(`Comisión cerrada para el técnico ${tecnicoId}. Cuenta regresiva de 48 horas iniciada.`, { remote_addr: context.remoteIp });
-      return result.rowCount > 0;
+      return (result.rowCount ?? 0) > 0;
     },
 
     regularizarCustodia: async (

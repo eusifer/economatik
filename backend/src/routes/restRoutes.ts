@@ -161,7 +161,7 @@ router.get(
   '/reports/kardex',
   authenticateJWT,
   requireRole(['administrador']),
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     try {
       const { Workbook } = require('exceljs');
       const workbook = new Workbook();
@@ -179,7 +179,7 @@ router.get(
 
       // Formatear cabecera (Azul Celeste Institucional)
       const headerRow = worksheet.getRow(1);
-      headerRow.eachCell((cell) => {
+      headerRow.eachCell((cell: import('exceljs').Cell) => {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',

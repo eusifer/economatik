@@ -3,23 +3,45 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Fallbacks seguros de desarrollo si no se definen en el entorno
-const AES_KEY_HEX = process.env.AES_KEY || '603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914df1a';
-const AES_IV_HEX = process.env.AES_IV || '2b7e151628aed2a6abf7158809cf4f3c';
+// ──────────────────────────────────────────────────────────────────────────────
+// FAIL-FAST: La clave AES DEBE estar definida como variable de entorno.
+// No se permiten valores por defecto — si la variable no existe el servidor
+// no arranca, protegiendo datos en reposo desde el inicio.
+// ──────────────────────────────────────────────────────────────────────────────
+const AES_KEY_HEX = process.env.AES_KEY;
+
+if (!AES_KEY_HEX) {
+  throw new Error(
+    '[CRYPTO] FATAL: La variable de entorno AES_KEY no está definida. ' +
+    'El servidor no puede arrancar sin una clave AES-256 configurada. ' +
+    'Consulte .env.example para instrucciones de configuración.'
+  );
+}
+
+if (AES_KEY_HEX.length !== 64) {
+  throw new Error(
+    `[CRYPTO] FATAL: AES_KEY debe ser exactamente 64 caracteres hexadecimales (256 bits). ` +
+    `Longitud actual: ${AES_KEY_HEX.length} caracteres.`
+  );
+}
 
 const key = Buffer.from(AES_KEY_HEX, 'hex');
-const iv = Buffer.from(AES_IV_HEX, 'hex');
 const algorithm = 'aes-256-cbc';
 
 /**
- * Encripta un string de texto plano usando AES-256-CBC y devuelve un Buffer binario para almacenar en columnas BYTEA.
+ * Encripta un string de texto plano usando AES-256-CBC con IV aleatorio por mensaje.
+ * El IV (16 bytes) se prepende al Buffer cifrado para permitir la desencriptación posterior.
+ * Formato del resultado: [IV (16 bytes)] + [Ciphertext]
  */
 export const encryptAES = (text: string): Buffer => {
   try {
+    // IV aleatorio generado en cada llamada — previene ataques de análisis de patrones
+    const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv(algorithm, key, iv);
     let encrypted = cipher.update(text, 'utf8');
     encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return encrypted;
+    // Prepender IV al ciphertext para que decryptAES pueda extraerlo
+    return Buffer.concat([iv, encrypted]);
   } catch (error) {
     console.error('Error durante la encriptación AES:', error);
     throw new Error('Fallo crítico al encriptar datos.');
@@ -27,12 +49,20 @@ export const encryptAES = (text: string): Buffer => {
 };
 
 /**
- * Desencripta un Buffer binario recuperado de PostgreSQL usando AES-256-CBC y devuelve el string original.
+ * Desencripta un Buffer recuperado de PostgreSQL (columna BYTEA).
+ * Extrae el IV de los primeros 16 bytes y usa el resto como ciphertext.
+ * Formato esperado del input: [IV (16 bytes)] + [Ciphertext]
  */
 export const decryptAES = (buffer: Buffer): string => {
   try {
+    if (buffer.length < 17) {
+      throw new Error('Buffer demasiado corto para contener IV + ciphertext.');
+    }
+    // Extraer el IV de los primeros 16 bytes
+    const iv = buffer.subarray(0, 16);
+    const ciphertext = buffer.subarray(16);
     const decipher = crypto.createDecipheriv(algorithm, key, iv);
-    let decrypted = decipher.update(buffer);
+    let decrypted = decipher.update(ciphertext);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString('utf8');
   } catch (error) {

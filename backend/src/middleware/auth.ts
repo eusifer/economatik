@@ -68,13 +68,13 @@ export const verifyToken = (token: string): AuthUser => {
 /**
  * Middleware para validar el token JWT y adjuntar el usuario autenticado al Request.
  */
-export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
   const ip = getClientIp(req);
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     logger.warn('Intento de acceso sin cabecera de autenticación válida.', { remote_addr: ip });
-    return res.status(401).json({ message: 'Acceso no autorizado: Token faltante' });
+    return void res.status(401).json({ message: 'Acceso no autorizado: Token faltante' });
   }
 
   const token = authHeader.split(' ')[1];
@@ -84,7 +84,7 @@ export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: 
     next();
   } catch (error: any) {
     logger.error('Fallo en la validación del token JWT.', { remote_addr: ip, error: error.message });
-    return res.status(401).json({ message: 'Acceso no autorizado: Token inválido o expirado' });
+    return void res.status(401).json({ message: 'Acceso no autorizado: Token inválido o expirado' });
   }
 };
 
@@ -92,12 +92,12 @@ export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: 
  * Middleware RBAC para validar que el usuario tenga un rol autorizado.
  */
 export const requireRole = (allowedRoles: ('administrador' | 'tecnico')[]) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     const ip = getClientIp(req);
     
     if (!req.user) {
       logger.warn('Acceso denegado: Middleware de roles invocado antes de la autenticación.', { remote_addr: ip });
-      return res.status(401).json({ message: 'No autenticado' });
+      return void res.status(401).json({ message: 'No autenticado' });
     }
 
     if (!allowedRoles.includes(req.user.rol)) {
@@ -105,7 +105,7 @@ export const requireRole = (allowedRoles: ('administrador' | 'tecnico')[]) => {
         remote_addr: ip,
         required_roles: allowedRoles,
       });
-      return res.status(403).json({ message: 'Acceso denegado: Permisos insuficientes' });
+      return void res.status(403).json({ message: 'Acceso denegado: Permisos insuficientes' });
     }
 
     next();

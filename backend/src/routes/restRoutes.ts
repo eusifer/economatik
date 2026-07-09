@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { loginController } from '../controllers/authController';
 import { downloadReportController } from '../controllers/reportController';
 import { authenticateJWT, requireRole } from '../middleware/auth';
-import { ActivoTIC, InsumoEconomato } from '../models/mongoSchemas';
+import { ActivoTIC, InsumoEconomato, MovimientoActivo } from '../models/mongoSchemas';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -39,13 +39,20 @@ router.post(
             usuario_red_asignado,
             nombre_usuario_final,
             ubicacion_agencia,
-            factura_referencia
+            factura_referencia,
+            factura_adjunto_b64,
+            factura_adjunto_mime,
+            fecha_compra
           } = item;
 
           if (!numero_serie || !tipo_equipo || !marca || !modelo || !nombre_estacion) {
             logger.warn('Falta campo requerido en item para carga masiva de activo equipo.', { item });
             continue;
           }
+
+          // Consultar si ya existe el activo en MongoDB CMDB para saber si es ingreso inicial o transferencia
+          const exist = await ActivoTIC.findOne({ numero_serie });
+          const isNew = !exist;
 
           // Upsert en MongoDB CMDB
           const result = await ActivoTIC.findOneAndUpdate(
@@ -59,12 +66,39 @@ router.post(
               nombre_estacion,
               usuario_red_asignado: usuario_red_asignado || 'system',
               nombre_usuario_final: nombre_usuario_final || 'Por Asignar',
-              fecha_registro_sistema: new Date(),
+              fecha_registro_sistema: exist ? exist.fecha_registro_sistema : new Date(),
               ubicacion_agencia: ubicacion_agencia || 'Sede Central',
-              factura_referencia: factura_referencia || null
+              factura_referencia: factura_referencia || null,
+              factura_adjunto_b64: factura_adjunto_b64 || null,
+              factura_adjunto_mime: factura_adjunto_mime || null,
+              fecha_compra: fecha_compra ? new Date(fecha_compra) : (exist && exist.fecha_compra ? exist.fecha_compra : new Date())
             },
             { upsert: true, new: true }
           );
+
+          // Asentar en Kardex de Activos (MovimientoActivo)
+          if (isNew) {
+            await MovimientoActivo.create({
+              numero_serie,
+              tipo_movimiento: 'Ingreso',
+              agencia_origen: null,
+              agencia_destino: ubicacion_agencia || 'Sede Central',
+              usuario_responsable: nombre_usuario_final || 'Por Asignar',
+              factura_referencia: factura_referencia || null,
+              motivo_detalle: 'Ingreso de compra inicial de lote de hardware'
+            });
+          } else if (exist.ubicacion_agencia !== (ubicacion_agencia || 'Sede Central')) {
+            await MovimientoActivo.create({
+              numero_serie,
+              tipo_movimiento: 'Transferencia',
+              agencia_origen: exist.ubicacion_agencia,
+              agencia_destino: ubicacion_agencia || 'Sede Central',
+              usuario_responsable: nombre_usuario_final || 'Por Asignar',
+              factura_referencia: factura_referencia || null,
+              motivo_detalle: 'Transferencia y asignación de equipo a nueva Sede'
+            });
+          }
+
           processed.push({ id: result.id, tipo: 'equipo', serie: numero_serie });
         } else if (item.tipo_registro === 'insumo' || item.tipo_registro === 'repuesto') {
           const {
@@ -74,7 +108,9 @@ router.post(
             categoria,
             cantidad_stock,
             unidad_medida,
-            factura_referencia
+            factura_referencia,
+            factura_adjunto_b64,
+            factura_adjunto_mime
           } = item;
 
           if (!ean_codigo || !descripcion_articulo || !categoria) {
@@ -92,7 +128,9 @@ router.post(
                 descripcion_articulo,
                 categoria: categoria === 'Insumo' ? 'Insumo' : 'Repuesto',
                 unidad_medida: unidad_medida || 'Unidad',
-                factura_referencia: factura_referencia || null
+                factura_referencia: factura_referencia || null,
+                factura_adjunto_b64: factura_adjunto_b64 || null,
+                factura_adjunto_mime: factura_adjunto_mime || null
               },
               $inc: {
                 cantidad_stock: Number(cantidad_stock || 1)
@@ -114,6 +152,70 @@ router.post(
     } catch (error: any) {
       logger.error('Error durante la carga masiva de inventario:', { error: error.message });
       return res.status(500).json({ message: 'Error interno durante la carga de inventario.' });
+    }
+  }
+);
+
+// 4. Ruta de Descarga de Kardex Consolidado (Solo Administrador)
+router.get(
+  '/reports/kardex',
+  authenticateJWT,
+  requireRole(['administrador']),
+  async (req: Request, res: Response) => {
+    try {
+      const { Workbook } = require('exceljs');
+      const workbook = new Workbook();
+      const worksheet = workbook.addWorksheet('Kardex de Activos TIC');
+
+      worksheet.columns = [
+        { header: 'NUMERO SERIE', key: 'numero_serie', width: 15 },
+        { header: 'TIPO EQUIPO', key: 'tipo_equipo', width: 15 },
+        { header: 'MARCA - MODELO', key: 'marca_modelo', width: 25 },
+        { header: 'AGENCIA ACTUAL', key: 'agencia_actual', width: 20 },
+        { header: 'FECHA COMPRA', key: 'fecha_compra', width: 15 },
+        { header: 'FACTURA REFERENCIA', key: 'factura_referencia', width: 20 },
+        { header: 'HISTORIAL DE MOVIMIENTOS', key: 'historial_movimientos', width: 65 }
+      ];
+
+      // Formatear cabecera (Azul Celeste Institucional)
+      const headerRow = worksheet.getRow(1);
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF87CEEB' }
+        };
+        cell.font = { name: 'Segoe UI', bold: true, color: { argb: 'FF000000' } };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
+
+      const activos = await ActivoTIC.find({});
+      for (const a of activos) {
+        const movimientos = await MovimientoActivo.find({ numero_serie: a.numero_serie }).sort({ fecha_movimiento: 1 });
+        
+        const transicion = movimientos.map(m => {
+          const fechaStr = m.fecha_movimiento.toISOString().substring(0, 10);
+          return `[${fechaStr}] ${m.tipo_movimiento}: ${m.agencia_origen || 'N/A'} -> ${m.agencia_destino} (${m.usuario_responsable})`;
+        }).join(' | ');
+
+        worksheet.addRow({
+          numero_serie: a.numero_serie.toUpperCase(),
+          tipo_equipo: a.tipo_equipo.toUpperCase(),
+          marca_modelo: `${a.marca} - ${a.modelo}`.toUpperCase(),
+          agencia_actual: a.ubicacion_agencia.toUpperCase(),
+          fecha_compra: a.fecha_compra ? a.fecha_compra.toISOString().substring(0, 10) : 'SIN FECHA',
+          factura_referencia: a.factura_referencia ? a.factura_referencia.toUpperCase() : 'SIN FACTURA',
+          historial_movimientos: transicion
+        });
+      }
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=kardex_consolidado_activos.xlsx');
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (err: any) {
+      logger.error('Error al exportar reporte de Kardex:', { error: err.message });
+      res.status(500).json({ message: 'Error al exportar reporte de Kardex.' });
     }
   }
 );

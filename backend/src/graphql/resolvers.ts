@@ -1,6 +1,6 @@
 import { pgPool } from '../config/db';
 import redisClient from '../config/redis';
-import { ActivoTIC, InsumoEconomato } from '../models/mongoSchemas';
+import { ActivoTIC, InsumoEconomato, MovimientoActivo } from '../models/mongoSchemas';
 import { encryptAES, decryptAES } from '../utils/crypto';
 import { logger } from '../utils/logger';
 import { AuthUser } from '../middleware/auth';
@@ -195,6 +195,20 @@ export const resolvers = {
 
     listActivosCMDB: async () => {
       return ActivoTIC.find({});
+    },
+
+    getKardexActivo: async (_parent: any, { serie }: { serie: string }) => {
+      try {
+        const result = await MovimientoActivo.find({ numero_serie: serie }).sort({ fecha_movimiento: 1 });
+        return result.map(m => ({
+          ...m.toObject(),
+          id: m._id.toString(),
+          fecha_movimiento: m.fecha_movimiento.toISOString(),
+        }));
+      } catch (err: any) {
+        logger.error('Error en getKardexActivo:', { error: err.message });
+        return [];
+      }
     },
   },
 
@@ -436,6 +450,7 @@ export const resolvers = {
         throw new Error('Ambos activos (viejo y nuevo) deben existir en la CMDB.');
       }
 
+      const originalAgenciaViejo = cpuViejo.ubicacion_agencia;
       const ipOriginal = cpuViejo.ip_asignada;
       const hostOriginal = cpuViejo.nombre_estacion;
 
@@ -443,6 +458,7 @@ export const resolvers = {
       cpuNuevo.ip_asignada = ipOriginal;
       cpuNuevo.nombre_estacion = hostOriginal;
       cpuNuevo.activo_reemplazado_id = serieViejo;
+      cpuNuevo.ubicacion_agencia = originalAgenciaViejo; // Se ubica en la agencia original del viejo
       await cpuNuevo.save();
 
       // 3. CPU viejo limpia parámetros de red y pasa a estado transicional "En Almacén (Para Reasignar)"
@@ -450,6 +466,27 @@ export const resolvers = {
       cpuViejo.nombre_estacion = `${hostOriginal}-OBSOLETO`;
       cpuViejo.ubicacion_agencia = 'En Almacén (Para Reasignar)';
       await cpuViejo.save();
+
+      // 4. Asentar movimientos en Kardex
+      await MovimientoActivo.create({
+        numero_serie: serieNuevo,
+        tipo_movimiento: 'Renovación',
+        agencia_origen: null,
+        agencia_destino: originalAgenciaViejo,
+        usuario_responsable: cpuNuevo.nombre_usuario_final || 'Por Asignar',
+        factura_referencia: cpuNuevo.factura_referencia || null,
+        motivo_detalle: `Instalación por renovación tecnológica. Reemplaza a CPU: ${serieViejo}`
+      });
+
+      await MovimientoActivo.create({
+        numero_serie: serieViejo,
+        tipo_movimiento: 'Renovación',
+        agencia_origen: originalAgenciaViejo,
+        agencia_destino: 'En Almacén (Para Reasignar)',
+        usuario_responsable: cpuViejo.nombre_usuario_final || 'Por Asignar',
+        factura_referencia: cpuViejo.factura_referencia || null,
+        motivo_detalle: `Desactivado por renovación tecnológica. Reemplazado por CPU: ${serieNuevo}`
+      });
 
       logger.info(`Renovación tecnológica completada: Nuevo CPU (${serieNuevo}) hereda red de CPU Viejo (${serieViejo}).`, { remote_addr: context.remoteIp });
       return true;
@@ -472,12 +509,24 @@ export const resolvers = {
 
       // 2. Liberar IP y host al instante en MongoDB CMDB
       const activo = await ActivoTIC.findOne({ numero_serie: args.serie_activo });
+      const agenciaOriginal = activo ? activo.ubicacion_agencia : 'Desconocida';
       if (activo) {
         activo.ip_asignada = null;
         activo.nombre_estacion = 'DEBAJA';
         activo.ubicacion_agencia = 'Baja Definitiva - Logística';
         await activo.save();
       }
+
+      // 3. Asentar movimiento de Baja en Kardex
+      await MovimientoActivo.create({
+        numero_serie: args.serie_activo,
+        tipo_movimiento: 'Baja',
+        agencia_origen: agenciaOriginal,
+        agencia_destino: 'Baja Definitiva - Logística',
+        usuario_responsable: 'Administrador Patrimonial',
+        factura_referencia: args.numero_informe,
+        motivo_detalle: `Baja definitiva según informe técnico: ${args.numero_informe}`
+      });
 
       logger.info(`Informe de Baja ${args.numero_informe} emitido. IP liberada para activo ${args.serie_activo}.`, { remote_addr: context.remoteIp });
       return true;

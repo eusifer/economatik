@@ -23,6 +23,11 @@ export default function AdminPage() {
   const [regUserFinal, setRegUserFinal] = useState('');
   const [regAgencia, setRegAgencia] = useState('');
 
+  // Estados para Adjunto de Factura
+  const [regAdjuntoB64, setRegAdjuntoB64] = useState<string | null>(null);
+  const [regAdjuntoMime, setRegAdjuntoMime] = useState<string | null>(null);
+  const [regAdjuntoNombre, setRegAdjuntoNombre] = useState<string>('');
+
   // Estados para Informes
   const [informeNum, setInformeNum] = useState('');
   const [diagTecnico, setDiagTecnico] = useState('');
@@ -39,6 +44,14 @@ export default function AdminPage() {
   const [totalScanners, setTotalScanners] = useState(0);
   const [totalInsumosStock, setTotalInsumosStock] = useState(0);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [recentActivos, setRecentActivos] = useState<any[]>([]);
+  const [recentInsumos, setRecentInsumos] = useState<any[]>([]);
+
+  // Estados para Kardex de Activos
+  const [regFechaCompra, setRegFechaCompra] = useState('');
+  const [serieKardexBusqueda, setSerieKardexBusqueda] = useState('');
+  const [kardexMovimientos, setKardexMovimientos] = useState<any[]>([]);
+  const [loadingKardex, setLoadingKardex] = useState(false);
 
   useEffect(() => {
     cargarEstadisticas();
@@ -54,10 +67,25 @@ export default function AdminPage() {
           query: `
             query GetStats {
               listActivosCMDB {
+                numero_serie
                 tipo_equipo
+                marca
+                modelo
+                ubicacion_agencia
+                factura_referencia
+                factura_adjunto_b64
+                factura_adjunto_mime
               }
               listInsumos {
+                sku_codigo
+                ean_codigo
+                descripcion_articulo
+                categoria
                 cantidad_stock
+                unidad_medida
+                factura_referencia
+                factura_adjunto_b64
+                factura_adjunto_mime
               }
             }
           `
@@ -89,12 +117,33 @@ export default function AdminPage() {
         setTotalLaptops(laptops);
         setTotalScanners(scanners);
         setTotalInsumosStock(totalStock);
+        setRecentActivos(activos);
+        setRecentInsumos(insumos);
       }
     } catch (err) {
       console.error('Error al cargar estadísticas:', err);
     } finally {
       setLoadingStats(false);
     }
+  };
+
+  const handleFileAdjuntoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setRegAdjuntoNombre(file.name);
+    setRegAdjuntoMime(file.type);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result as string;
+      if (dataUrl) {
+        // Extraer la parte base64 pura
+        const base64Data = dataUrl.split(',')[1];
+        setRegAdjuntoB64(base64Data);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const descargarPlantillaCSV = () => {
@@ -209,6 +258,8 @@ export default function AdminPage() {
       payload = {
         tipo_registro: 'equipo',
         factura_referencia: regFactura,
+        factura_adjunto_b64: regAdjuntoB64 || null,
+        factura_adjunto_mime: regAdjuntoMime || null,
         numero_serie: regSerieEan,
         tipo_equipo: regNombreDesc,
         marca: regMarcaCat,
@@ -217,12 +268,15 @@ export default function AdminPage() {
         nombre_estacion: regEstacion,
         usuario_red_asignado: regUserRed || 'system',
         nombre_usuario_final: regUserFinal || 'Por Asignar',
-        ubicacion_agencia: regAgencia
+        ubicacion_agencia: regAgencia,
+        fecha_compra: regFechaCompra || null
       };
     } else {
       payload = {
         tipo_registro: 'insumo',
         factura_referencia: regFactura,
+        factura_adjunto_b64: regAdjuntoB64 || null,
+        factura_adjunto_mime: regAdjuntoMime || null,
         ean_codigo: regSerieEan,
         descripcion_articulo: regNombreDesc,
         categoria: regMarcaCat === 'Insumo' ? 'Insumo' : 'Repuesto',
@@ -256,12 +310,90 @@ export default function AdminPage() {
         setRegUserRed('');
         setRegUserFinal('');
         setRegAgencia('');
+        setRegFechaCompra('');
+        setRegAdjuntoB64(null);
+        setRegAdjuntoMime(null);
+        setRegAdjuntoNombre('');
         cargarEstadisticas();
       } else {
         alert(`Error: ${result.message}`);
       }
     } catch (err: any) {
       alert(`Error al registrar: ${err.message}`);
+    }
+  const consultarKardexActivo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serieKardexBusqueda.trim()) return;
+
+    setLoadingKardex(true);
+    try {
+      const res = await fetch(`${backendUrl}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            query GetKardex($serie: String!) {
+              getKardexActivo(serie: $serie) {
+                id
+                numero_serie
+                fecha_movimiento
+                tipo_movimiento
+                agencia_origen
+                agencia_destino
+                usuario_responsable
+                factura_referencia
+                motivo_detalle
+              }
+            }
+          `,
+          variables: { serie: serieKardexBusqueda }
+        })
+      });
+
+      const data = await res.json();
+      if (data.data) {
+        setKardexMovimientos(data.data.getKardexActivo || []);
+      } else {
+        setKardexMovimientos([]);
+      }
+    } catch (err) {
+      console.error(err);
+      setKardexMovimientos([]);
+    } finally {
+      setLoadingKardex(false);
+    }
+  };
+
+  const descargarKardexConsolidado = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Debe iniciar una sesión simulada en el inicio para descargar el reporte.');
+        return;
+      }
+
+      const res = await fetch(`${backendUrl}/api/reports/kardex`, {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : ''
+        }
+      });
+
+      if (res.status === 200) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "kardex_consolidado_activos.xlsx");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.message}`);
+      }
+    } catch (err: any) {
+      alert(`Error de descarga: ${err.message}`);
     }
   };
 
@@ -433,12 +565,20 @@ export default function AdminPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white">Panel del Administrador Patrimonial</h1>
           <p className="text-sm text-slate-400 mt-1">Gestión avanzada de inventarios, reportes de auditoría y ciclos de renovación.</p>
         </div>
-        <button
-          onClick={descargarExcel}
-          className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 transition rounded-lg text-sm font-bold text-white shadow-lg shadow-green-500/20"
-        >
-          <Download className="w-4 h-4" /> Exportar Reporte Mensual (ExcelJS)
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={descargarKardexConsolidado}
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-650 hover:bg-blue-600 transition rounded-lg text-sm font-bold text-white shadow-lg shadow-blue-500/20"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Descargar Kardex Consolidado (Excel)
+          </button>
+          <button
+            onClick={descargarExcel}
+            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 transition rounded-lg text-sm font-bold text-white shadow-lg shadow-green-500/20"
+          >
+            <Download className="w-4 h-4" /> Exportar Reporte Mensual (ExcelJS)
+          </button>
+        </div>
       </div>
 
       {/* Panel de Reportes e Indicadores */}
@@ -555,7 +695,7 @@ export default function AdminPage() {
                 <Plus className="w-5 h-5 text-blue-400" /> Registro de Adquisición Manual
               </h3>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {/* Tipo de Registro */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="reg-tipo" className="text-xs text-slate-400 font-semibold">Tipo de Artículo *</label>
@@ -565,8 +705,8 @@ export default function AdminPage() {
                     onChange={(e) => setRegTipo(e.target.value as 'equipo' | 'insumo')}
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="equipo">Equipo TIC (CPU/Sw/Biométrico)</option>
-                    <option value="insumo">Insumo/Repuesto (Almacén)</option>
+                    <option value="equipo">Equipo TIC</option>
+                    <option value="insumo">Insumo/Repuesto</option>
                   </select>
                 </div>
 
@@ -579,6 +719,18 @@ export default function AdminPage() {
                     placeholder="Ej. F001-0004523"
                     value={regFactura}
                     onChange={(e) => setRegFactura(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Fecha Compra */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="reg-fechacompra" className="text-xs text-slate-400 font-semibold">Fecha Compra</label>
+                  <input
+                    id="reg-fechacompra"
+                    type="date"
+                    value={regFechaCompra}
+                    onChange={(e) => setRegFechaCompra(e.target.value)}
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -658,6 +810,27 @@ export default function AdminPage() {
                     onChange={(e) => setRegModeloUnidad(e.target.value)}
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+              </div>
+
+              {/* Cargar Adjunto (Factura Imagen/PDF) */}
+              <div className="flex flex-col gap-1.5 border-t border-slate-850 pt-3">
+                <label className="text-xs text-slate-400 font-semibold">Factura Digital Adjunta (Opcional - Imagen o PDF)</label>
+                <div className="flex items-center gap-3">
+                  <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-xs font-semibold px-4 py-2 rounded-lg transition text-slate-200">
+                    Subir PDF o Imagen
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={handleFileAdjuntoChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {regAdjuntoNombre && (
+                    <span className="text-[10px] text-slate-350 font-mono truncate max-w-[200px] bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-850">
+                      📎 {regAdjuntoNombre}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -888,6 +1061,223 @@ export default function AdminPage() {
             </div>
           </div>
         </form>
+      </section>
+
+      {/* Módulo de Consulta de Facturas y Equipos Adquiridos */}
+      <section className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 space-y-6">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <FileText className="w-5 h-5 text-emerald-400" /> Registro y Visualización de Facturas de Compra
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Consulte las facturas e imágenes/PDFs de compra asociados a los activos en la CMDB y a los repuestos del economato central.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Equipos con Factura */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equipos en Parque TIC (CMDB)</h3>
+            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
+                    <th className="p-3">Serie</th>
+                    <th className="p-3">Equipo</th>
+                    <th className="p-3">Factura</th>
+                    <th className="p-3">Documento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentActivos.filter(a => a.factura_referencia).length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-3 text-center text-slate-500 italic">No hay facturas de equipos registradas.</td>
+                    </tr>
+                  ) : (
+                    recentActivos.filter(a => a.factura_referencia).map((a: any) => (
+                      <tr key={a.numero_serie} className="border-b border-slate-850 hover:bg-slate-900/40 transition">
+                        <td className="p-3 font-mono font-bold text-slate-350">{a.numero_serie}</td>
+                        <td className="p-3">
+                          <div className="text-slate-200 font-medium">{a.tipo_equipo}</div>
+                          <div className="text-[10px] text-slate-450">{a.marca} - {a.modelo}</div>
+                        </td>
+                        <td className="p-3 text-slate-300 font-mono">{a.factura_referencia}</td>
+                        <td className="p-3">
+                          {a.factura_adjunto_b64 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const byteCharacters = atob(a.factura_adjunto_b64);
+                                const byteNumbers = new Array(byteCharacters.length);
+                                for (let i = 0; i < byteCharacters.length; i++) {
+                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                }
+                                const byteArray = new Uint8Array(byteNumbers);
+                                const blob = new Blob([byteArray], { type: a.factura_adjunto_mime || 'application/pdf' });
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, '_blank');
+                              }}
+                              className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-900/40 text-[10px] font-bold text-blue-400 rounded-lg transition"
+                            >
+                              Ver Adjunto
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-600 italic">Sin archivo</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Insumos con Factura */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Insumos y Repuestos (Economato)</h3>
+            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
+                    <th className="p-3">EAN</th>
+                    <th className="p-3">Descripción</th>
+                    <th className="p-3">Factura</th>
+                    <th className="p-3">Stock / Doc</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentInsumos.filter(i => i.factura_referencia).length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-3 text-center text-slate-500 italic">No hay facturas de insumos registradas.</td>
+                    </tr>
+                  ) : (
+                    recentInsumos.filter(i => i.factura_referencia).map((i: any) => (
+                      <tr key={i.ean_codigo} className="border-b border-slate-850 hover:bg-slate-900/40 transition">
+                        <td className="p-3 font-mono font-bold text-slate-350">{i.ean_codigo}</td>
+                        <td className="p-3 text-slate-200 font-medium">{i.descripcion_articulo}</td>
+                        <td className="p-3 text-slate-300 font-mono">{i.factura_referencia}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-slate-350 font-bold bg-slate-950/60 px-2 py-0.5 rounded border border-slate-850 text-[10px]">{i.cantidad_stock} {i.unidad_medida}</span>
+                            {i.factura_adjunto_b64 ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const byteCharacters = atob(i.factura_adjunto_b64);
+                                  const byteNumbers = new Array(byteCharacters.length);
+                                  for (let i = 0; i < byteCharacters.length; i++) {
+                                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                  }
+                                  const byteArray = new Uint8Array(byteNumbers);
+                                  const blob = new Blob([byteArray], { type: i.factura_adjunto_mime || 'application/pdf' });
+                                  const url = URL.createObjectURL(blob);
+                                  window.open(url, '_blank');
+                                }}
+                                className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-900/40 text-[10px] font-bold text-blue-400 rounded-lg transition"
+                              >
+                                Ver Adjunto
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-slate-600 italic">Sin archivo</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Módulo de Kardex Logístico de Activos TIC */}
+      <section className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 space-y-6">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Kardex Logístico e Historial de Movimientos (Trazabilidad)
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Consulte la línea de tiempo completa, asignaciones, transferencias de agencias y bajas de cualquier activo TIC mediante su número de serie.
+          </p>
+        </div>
+
+        <form onSubmit={consultarKardexActivo} className="flex gap-3 max-w-md">
+          <input
+            type="text"
+            placeholder="Ingrese Número de Serie (Ej. HP-8877)"
+            value={serieKardexBusqueda}
+            onChange={(e) => setSerieKardexBusqueda(e.target.value)}
+            className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-blue-500 font-mono font-bold"
+          />
+          <button
+            type="submit"
+            disabled={loadingKardex}
+            className="px-4 py-2 bg-blue-650 hover:bg-blue-600 disabled:bg-slate-800 rounded-lg text-xs font-bold text-white transition flex items-center gap-1.5"
+          >
+            {loadingKardex ? 'Buscando...' : 'Consultar Kardex'}
+          </button>
+        </form>
+
+        {kardexMovimientos.length > 0 ? (
+          <div className="relative border-l-2 border-slate-800 ml-4 pl-6 space-y-6 py-2">
+            {kardexMovimientos.map((mov) => (
+              <div key={mov.id} className="relative">
+                {/* Indicador / Viñeta de la Línea de Tiempo */}
+                <span className={`absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 bg-slate-950 ${
+                  mov.tipo_movimiento === 'Ingreso' ? 'border-emerald-500 text-emerald-500' :
+                  mov.tipo_movimiento === 'Transferencia' ? 'border-blue-500 text-blue-500' :
+                  mov.tipo_movimiento === 'Baja' ? 'border-red-500 text-red-500' :
+                  'border-purple-500 text-purple-500'
+                }`} />
+
+                {/* Contenido del Hito */}
+                <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      mov.tipo_movimiento === 'Ingreso' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/60' :
+                      mov.tipo_movimiento === 'Transferencia' ? 'bg-blue-950/60 text-blue-400 border border-blue-900/60' :
+                      mov.tipo_movimiento === 'Baja' ? 'bg-red-950/60 text-red-400 border border-red-900/60' :
+                      'bg-purple-950/60 text-purple-400 border border-purple-900/60'
+                    }`}>
+                      {mov.tipo_movimiento.toUpperCase()}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono font-bold">
+                      {new Date(Number(mov.fecha_movimiento) ? Number(mov.fecha_movimiento) : mov.fecha_movimiento).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-200 font-medium">
+                    {mov.motivo_detalle}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-900 text-[10px] text-slate-400">
+                    <div>
+                      <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Agencia / Sede</span>
+                      <span className="font-medium text-slate-350">
+                        {mov.agencia_origen ? `${mov.agencia_origen} ➔ ` : ''}{mov.agencia_destino}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Responsable</span>
+                      <span className="font-mono text-slate-350 font-bold">{mov.usuario_responsable}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Sustento / Factura</span>
+                      <span className="font-mono text-slate-350">{mov.factura_referencia || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          serieKardexBusqueda && !loadingKardex && (
+            <p className="text-xs text-slate-500 italic pl-2">No se encontraron movimientos registrados en el Kardex para la serie ingresada.</p>
+          )
+        )}
       </section>
     </div>
   );

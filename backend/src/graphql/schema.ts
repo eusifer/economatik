@@ -51,6 +51,10 @@ export const typeDefs = gql`
     fecha_registro_sistema: String!
     ubicacion_agencia: String!
     activo_reemplazado_id: String
+    factura_referencia: String
+    factura_adjunto_b64: String
+    factura_adjunto_mime: String
+    fecha_compra: String
   }
 
   type InsumoEconomato {
@@ -61,6 +65,21 @@ export const typeDefs = gql`
     categoria: String!
     cantidad_stock: Int!
     unidad_medida: String!
+    factura_referencia: String
+    factura_adjunto_b64: String
+    factura_adjunto_mime: String
+  }
+
+  type MovimientoActivo {
+    id: ID!
+    numero_serie: String!
+    fecha_movimiento: String!
+    tipo_movimiento: String!
+    agencia_origen: String
+    agencia_destino: String!
+    usuario_responsable: String!
+    factura_referencia: String
+    motivo_detalle: String!
   }
 
   type CustodiaRepuesto {
@@ -87,6 +106,7 @@ export const typeDefs = gql`
     listActivosCMDB: [ActivoTIC!]!
     countTicketsActivo(serie: String!): Int!
     getHistorialActivo(serie: String!): [Ticket!]!
+    getKardexActivo(serie: String!): [MovimientoActivo!]!
   }
 
   type Mutation {

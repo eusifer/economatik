@@ -48,6 +48,8 @@ export default function HomePage() {
       if (res.status === 200) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        // Notificar a SessionBadge en el header (mismo tab)
+        window.dispatchEvent(new Event('session-change'));
         setUser(data.user);
       } else {
         setErrorMsg(data.message || 'Credenciales inválidas.');
@@ -62,6 +64,8 @@ export default function HomePage() {
 
   const limpiarSesion = () => {
     localStorage.clear();
+    // Notificar a SessionBadge en el header (mismo tab)
+    window.dispatchEvent(new Event('session-change'));
     setUser(null);
     setUsernameInput('');
     setPasswordInput('');

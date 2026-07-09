@@ -2,42 +2,70 @@
 
 import { useEffect, useState } from 'react';
 
-interface SessionData {
+interface UserSession {
+  id: string;
   username: string;
   rol: string;
 }
 
 /**
- * Componente cliente que lee la sesión activa desde localStorage.
- * Se hidrata únicamente en el navegador, evitando errores de SSR
- * al acceder a APIs exclusivas del cliente (localStorage).
+ * Lee la sesión desde las mismas claves que escribe page.tsx:
+ *   localStorage.setItem('token', ...)
+ *   localStorage.setItem('user', JSON.stringify(...))
+ *
+ * También escucha el evento 'storage' para actualizarse automáticamente
+ * cuando limpiarSesion() hace localStorage.clear() desde otra pestaña
+ * o cuando el login escribe las claves por primera vez.
+ *
+ * Para actualizaciones en la MISMA pestaña (logout en page.tsx),
+ * se escucha además el evento personalizado 'session-change'.
  */
 export default function SessionBadge() {
-  const [session, setSession] = useState<SessionData | null>(null);
+  const [session, setSession] = useState<UserSession | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
+  const leerSesion = () => {
     try {
-      const raw = localStorage.getItem('enocomatik_session');
-      if (raw) {
-        const parsed: SessionData = JSON.parse(raw);
+      const token = localStorage.getItem('token');
+      const userRaw = localStorage.getItem('user');
+      if (token && userRaw) {
+        const parsed: UserSession = JSON.parse(userRaw);
         if (parsed.username && parsed.rol) {
           setSession(parsed);
+          return;
         }
       }
     } catch {
-      // Si el JSON está corrupto, tratar como sin sesión
-      setSession(null);
+      // JSON corrupto → tratar como sin sesión
     }
+    setSession(null);
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    leerSesion();
+
+    // Evento estándar del navegador: detecta cambios de localStorage
+    // desde OTRAS pestañas (misma origin).
+    window.addEventListener('storage', leerSesion);
+
+    // Evento personalizado: detecta login/logout dentro de la MISMA pestaña.
+    // page.tsx debe disparar: window.dispatchEvent(new Event('session-change'))
+    // después de escribir/limpiar localStorage.
+    window.addEventListener('session-change', leerSesion);
+
+    return () => {
+      window.removeEventListener('storage', leerSesion);
+      window.removeEventListener('session-change', leerSesion);
+    };
   }, []);
 
-  // Antes de hidratación: placeholder invisible para evitar flash de contenido
+  // Placeholder invisible antes de hidratación (evita SSR mismatch)
   if (!mounted) {
     return (
-      <div className="text-right opacity-0" aria-hidden="true">
-        <div className="text-xs text-slate-400">Rol Activo:</div>
-        <div className="text-sm font-semibold text-blue-400">...</div>
+      <div className="text-right opacity-0 select-none" aria-hidden="true">
+        <div className="text-xs">·</div>
+        <div className="text-sm">·</div>
       </div>
     );
   }
@@ -45,8 +73,8 @@ export default function SessionBadge() {
   if (!session) {
     return (
       <div className="text-right" role="status" aria-live="polite">
-        <div className="text-xs text-slate-400">Sesión:</div>
-        <div className="text-sm font-semibold text-slate-500">
+        <div className="text-xs text-slate-500">Sesión:</div>
+        <div className="text-sm font-semibold text-slate-500 italic">
           Sin sesión activa
         </div>
       </div>
@@ -60,7 +88,7 @@ export default function SessionBadge() {
 
   return (
     <div className="text-right" role="status" aria-live="polite">
-      <div className="text-xs text-slate-400 truncate max-w-[140px]">
+      <div className="text-xs text-slate-400 truncate max-w-[160px]">
         {session.username}
       </div>
       <div className="text-sm font-semibold text-blue-400">

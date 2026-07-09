@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Upload, FileText, Download, RefreshCw, Cpu } from 'lucide-react';
 
 export default function AdminPage() {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
   // Estado para la carga masiva
   const [jsonActivos, setJsonActivos] = useState(`[
   {
@@ -44,7 +45,7 @@ export default function AdminPage() {
     try {
       const data = JSON.parse(jsonActivos);
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/api/assets/bulk-upload', {
+      const res = await fetch(`${backendUrl}/api/assets/bulk-upload`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +73,7 @@ export default function AdminPage() {
         return;
       }
 
-      const res = await fetch('http://localhost:4000/api/reports/download', {
+      const res = await fetch(`${backendUrl}/api/reports/download`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -108,7 +109,7 @@ export default function AdminPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -153,7 +154,7 @@ export default function AdminPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -196,7 +197,7 @@ export default function AdminPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

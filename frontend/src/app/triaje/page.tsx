@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldAlert, RefreshCw, Save } from 'lucide-react';
 
 export default function TriajePage() {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
   const [serieBusqueda, setSerieBusqueda] = useState('');
   const [registroContingencia, setRegistroContingencia] = useState(false);
   const [esCritico, setEsCritico] = useState(false);
@@ -37,7 +38,7 @@ export default function TriajePage() {
     setCargando(true);
     try {
       // 1. Llamar a GraphQL searchActivo
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export default function TriajePage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

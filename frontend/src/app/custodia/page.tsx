@@ -17,6 +17,7 @@ interface CustodiaItem {
 }
 
 export default function CustodiaPage() {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
   const [custodia, setCustodia] = useState<CustodiaItem[]>([]);
   const [tecnicoId, setTecnicoId] = useState('');
   const [isBlocked, setIsBlocked] = useState(false);
@@ -46,7 +47,7 @@ export default function CustodiaPage() {
   const cargarCustodiaYTension = async () => {
     setCargando(true);
     try {
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,7 +96,7 @@ export default function CustodiaPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -140,7 +141,7 @@ export default function CustodiaPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -171,7 +172,7 @@ export default function CustodiaPage() {
   const regularizarItem = async (ean: string, estado: 'Consumido' | 'Devuelto') => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

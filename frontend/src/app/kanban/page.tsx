@@ -18,6 +18,7 @@ interface Ticket {
 }
 
 export default function KanbanPage() {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [cargando, setCargando] = useState(false);
   const [criticosMap, setCriticosMap] = useState<Record<string, boolean>>({});
@@ -37,7 +38,7 @@ export default function KanbanPage() {
   const cargarTickets = async () => {
     setCargando(true);
     try {
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -81,7 +82,7 @@ export default function KanbanPage() {
 
   const evaluarCritico = async (serie: string) => {
     try {
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,7 +109,7 @@ export default function KanbanPage() {
   const moverEstado = async (ticketId: string, nuevoEstado: string) => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -147,7 +148,7 @@ export default function KanbanPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:4000/graphql', {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

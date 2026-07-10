@@ -4,7 +4,7 @@ import Link from 'next/link';
 import SessionBadge from '@/components/SessionBadge';
 
 export const metadata: Metadata = {
-  title: 'ENOCOMATIK - Gestión de Activos TIC',
+  title: 'ECONOMATIK - Gestión de Activos TIC',
   description: 'Solución corporativa de gestión de activos logísticos y economato para entidades de gobierno',
 };
 
@@ -20,7 +20,7 @@ export default function RootLayout({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-8">
               <Link href="/" className="text-xl font-bold tracking-tight text-blue-400 focus:ring-2 focus:ring-blue-500 rounded p-1">
-                ENOCOMATIK
+                ECONOMATIK
               </Link>
               <nav aria-label="Navegación Principal" className="hidden md:flex items-center gap-6">
                 <Link href="/triaje" className="text-sm font-medium text-slate-300 hover:text-white transition p-2 rounded focus:ring-2 focus:ring-blue-500">
@@ -49,7 +49,7 @@ export default function RootLayout({
         </main>
 
         <footer className="border-t border-slate-800 bg-slate-900/40 text-center py-6 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} ENOCOMATIK. Software de Gestión de Activos para el Sector Público.</p>
+          <p>© {new Date().getFullYear()} ECONOMATIK. Software de Gestión de Activos para el Sector Público.</p>
         </footer>
       </body>
     </html>

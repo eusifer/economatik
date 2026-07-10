@@ -6,7 +6,7 @@ import { Upload, FileText, Download, RefreshCw, Cpu, Server, Laptop, Archive, Tr
 
 export default function AdminPage() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-  
+
   // Modos de Carga e Inventario
   const [activeTab, setActiveTab] = useState<'csv' | 'manual'>('csv');
 
@@ -149,13 +149,13 @@ export default function AdminPage() {
 
   const descargarPlantillaCSV = () => {
     const csvContent = "tipo_registro,factura,serie_o_ean,nombre_o_descripcion,marca_o_categoria,modelo_o_unidad,cantidad,ip_asignada,nombre_estacion,usuario_red,usuario_final,ubicacion_agencia\n" +
-                       "equipo,F001-0001,LEN-9988,PC,LENOVO,ThinkCentre M70q,,192.168.20.50,APT-01OP-50,jsmith,John Smith,San Martin\n" +
-                       "insumo,F001-0002,EAN-1001,ROLLER MULTI PURPOSE HP MFP M426,Repuesto,Unidad,5,,,,,";
+      "equipo,F001-0001,LEN-9988,PC,LENOVO,ThinkCentre M70q,,192.168.20.50,APT-01OP-50,jsmith,John Smith,San Martin\n" +
+      "insumo,F001-0002,EAN-1001,ROLLER MULTI PURPOSE HP MFP M426,Repuesto,Unidad,5,,,,,";
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", "plantilla_carga_enocomatik.csv");
+    link.setAttribute("download", "plantilla_carga_economatik.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -641,17 +641,15 @@ export default function AdminPage() {
           <div className="flex border-b border-slate-800">
             <button
               onClick={() => setActiveTab('csv')}
-              className={`flex-1 pb-3 text-sm font-semibold transition ${
-                activeTab === 'csv' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'
-              }`}
+              className={`flex-1 pb-3 text-sm font-semibold transition ${activeTab === 'csv' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'
+                }`}
             >
               Carga por Lotes CSV
             </button>
             <button
               onClick={() => setActiveTab('manual')}
-              className={`flex-1 pb-3 text-sm font-semibold transition ${
-                activeTab === 'manual' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'
-              }`}
+              className={`flex-1 pb-3 text-sm font-semibold transition ${activeTab === 'manual' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'
+                }`}
             >
               Registro Manual Individual
             </button>
@@ -663,7 +661,7 @@ export default function AdminPage() {
                 <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Carga Masiva de Facturas (.csv)
               </h3>
               <p className="text-xs text-slate-400">
-                Seleccione un archivo delimitado por comas (.csv) correspondiente al lote de la Factura de Adquisición recibida. 
+                Seleccione un archivo delimitado por comas (.csv) correspondiente al lote de la Factura de Adquisición recibida.
                 El sistema actualizará el stock de repuestos e indexará nuevos equipos en la CMDB.
               </p>
 
@@ -681,7 +679,7 @@ export default function AdminPage() {
               </div>
 
               <div className="flex justify-between items-center bg-slate-950/40 p-3 rounded-lg border border-slate-850">
-                <span className="text-[10px] text-slate-400 font-mono">plantilla_carga_enocomatik.csv</span>
+                <span className="text-[10px] text-slate-400 font-mono">plantilla_carga_economatik.csv</span>
                 <button
                   onClick={descargarPlantillaCSV}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-650 hover:bg-blue-600 rounded-lg text-xs font-bold text-white transition"
@@ -856,7 +854,7 @@ export default function AdminPage() {
               {regTipo === 'equipo' && (
                 <div className="space-y-3 bg-slate-950/30 p-3 rounded-lg border border-slate-850">
                   <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Detalles de Sede e Identificación en Red</h4>
-                  
+
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex flex-col gap-1">
                       <label htmlFor="reg-ip" className="text-[10px] text-slate-400">Dirección IP Asignada</label>
@@ -978,7 +976,7 @@ export default function AdminPage() {
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
           <FileText className="w-5 h-5 text-blue-400" /> Emisión de Informes Técnicos de Activos
         </h2>
-        
+
         <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Datos Generales */}
           <div className="space-y-4">
@@ -1053,7 +1051,7 @@ export default function AdminPage() {
             <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-900/30 space-y-2">
               <h3 className="text-sm font-bold text-blue-400">Módulo INF-RENOV (Reutilización Ligera)</h3>
               <p className="text-xs text-slate-500">Este informe registra la re-asignación. Requiere aprobación administrativa antes de habilitarse de nuevo.</p>
-              
+
               <button
                 type="button"
                 onClick={emitirInformeRenovacion}
@@ -1229,22 +1227,20 @@ export default function AdminPage() {
             {kardexMovimientos.map((mov) => (
               <div key={mov.id} className="relative">
                 {/* Indicador / Viñeta de la Línea de Tiempo */}
-                <span className={`absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 bg-slate-950 ${
-                  mov.tipo_movimiento === 'Ingreso' ? 'border-emerald-500 text-emerald-500' :
-                  mov.tipo_movimiento === 'Transferencia' ? 'border-blue-500 text-blue-500' :
-                  mov.tipo_movimiento === 'Baja' ? 'border-red-500 text-red-500' :
-                  'border-purple-500 text-purple-500'
-                }`} />
+                <span className={`absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 bg-slate-950 ${mov.tipo_movimiento === 'Ingreso' ? 'border-emerald-500 text-emerald-500' :
+                    mov.tipo_movimiento === 'Transferencia' ? 'border-blue-500 text-blue-500' :
+                      mov.tipo_movimiento === 'Baja' ? 'border-red-500 text-red-500' :
+                        'border-purple-500 text-purple-500'
+                  }`} />
 
                 {/* Contenido del Hito */}
                 <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      mov.tipo_movimiento === 'Ingreso' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/60' :
-                      mov.tipo_movimiento === 'Transferencia' ? 'bg-blue-950/60 text-blue-400 border border-blue-900/60' :
-                      mov.tipo_movimiento === 'Baja' ? 'bg-red-950/60 text-red-400 border border-red-900/60' :
-                      'bg-purple-950/60 text-purple-400 border border-purple-900/60'
-                    }`}>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${mov.tipo_movimiento === 'Ingreso' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/60' :
+                        mov.tipo_movimiento === 'Transferencia' ? 'bg-blue-950/60 text-blue-400 border border-blue-900/60' :
+                          mov.tipo_movimiento === 'Baja' ? 'bg-red-950/60 text-red-400 border border-red-900/60' :
+                            'bg-purple-950/60 text-purple-400 border border-purple-900/60'
+                      }`}>
                       {mov.tipo_movimiento.toUpperCase()}
                     </span>
                     <span className="text-[10px] text-slate-500 font-mono font-bold">

@@ -10,17 +10,26 @@ const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
 let redisClient: Redis;
 
 try {
-  redisClient = new Redis({
-    host: REDIS_HOST,
-    port: REDIS_PORT,
-    password: REDIS_PASSWORD,
-    maxRetriesPerRequest: 3,
-    connectTimeout: 5000,
-    retryStrategy(times) {
-      const delay = Math.min(times * 100, 3000);
-      return delay;
-    },
-  });
+  redisClient = process.env.REDIS_URL
+    ? new Redis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: 3,
+        connectTimeout: 5000,
+        retryStrategy(times) {
+          const delay = Math.min(times * 100, 3000);
+          return delay;
+        },
+      })
+    : new Redis({
+        host: REDIS_HOST,
+        port: REDIS_PORT,
+        password: REDIS_PASSWORD,
+        maxRetriesPerRequest: 3,
+        connectTimeout: 5000,
+        retryStrategy(times) {
+          const delay = Math.min(times * 100, 3000);
+          return delay;
+        },
+      });
 
   redisClient.on('connect', () => {
     console.log('Cliente Redis conectado exitosamente.');

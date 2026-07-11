@@ -163,14 +163,6 @@ export default function HomePage() {
               >
                 {cargando ? 'Autenticando...' : 'Iniciar Sesión'}
               </button>
-
-              <div className="text-[10px] text-slate-600 bg-slate-950/60 p-2.5 rounded-lg border border-slate-900/60">
-                <span className="font-semibold text-slate-500">Credenciales demo (sembradas en BD):</span>
-                <div className="mt-1 flex justify-between">
-                  <span>🔑 Admin: <span className="text-slate-400 font-mono">admin / admin123</span></span>
-                  <span>🔧 Técnico: <span className="text-slate-400 font-mono">tecnico1 / tecnico123</span></span>
-                </div>
-              </div>
             </form>
           )}
         </div>

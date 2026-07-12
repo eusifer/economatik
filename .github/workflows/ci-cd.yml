@@ -71,7 +71,7 @@ jobs:
     - name: Compilar imagen Backend (sin push)
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: ./backend
         file: devops/backend.Dockerfile
         push: false
         tags: enocomatik-backend:${{ github.sha }}
@@ -81,7 +81,7 @@ jobs:
     - name: Compilar imagen Frontend (sin push)
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: ./frontend
         file: devops/frontend.Dockerfile
         push: false
         tags: enocomatik-frontend:${{ github.sha }}

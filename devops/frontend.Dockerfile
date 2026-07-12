@@ -7,8 +7,15 @@ COPY package*.json tsconfig.json tailwind.config.js postcss.config.js ./
 RUN npm ci
 
 COPY src ./src
+COPY public ./public
+
 # Deshabilitar telemetría de Next.js
 ENV NEXT_TELEMETRY_DISABLED 1
+
+# Argumento para inyectar la URL del backend durante la compilación
+ARG NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
 RUN npm run build
 
 # Stage 2: Production Stage

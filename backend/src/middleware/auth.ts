@@ -38,7 +38,7 @@ function generateBackupKeys() {
 export interface AuthUser {
   id: string;
   username: string;
-  rol: 'administrador' | 'tecnico';
+  rol: 'administrador' | 'tecnico' | 'invitado';
 }
 
 // Extender la interfaz de Request para Express
@@ -91,7 +91,7 @@ export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: 
 /**
  * Middleware RBAC para validar que el usuario tenga un rol autorizado.
  */
-export const requireRole = (allowedRoles: ('administrador' | 'tecnico')[]) => {
+export const requireRole = (allowedRoles: ('administrador' | 'tecnico' | 'invitado')[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     const ip = getClientIp(req);
     

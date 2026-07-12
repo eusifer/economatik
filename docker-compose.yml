@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../devops/backend.Dockerfile
+    container_name: enocomatik-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://neondb_owner:npg_SkH0tMQah9cC@ep-lingering-glade-ai9j0er0.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require
+      - MONGO_URI=mongodb://economatik_user:keiko2026@ac-ruublv6-shard-00-00.oovnmov.mongodb.net:27017,ac-ruublv6-shard-00-01.oovnmov.mongodb.net:27017,ac-ruublv6-shard-00-02.oovnmov.mongodb.net:27017/?ssl=true&replicaSet=atlas-9omy10-shard-0&authSource=admin&appName=economatik-cluster
+      - REDIS_URL=rediss://default:gQAAAAAAAQepAAIgcDE5NWZlYjA4ZjA3ZWE0YWJiYjg2ZmU4NGFiZDU1NWY5ZA@relaxed-robin-67497.upstash.io:6379
+      - AES_KEY=1ff78011f1fbb33004589ff6b4c4cf865675890e7f44bc5eeb2c9ed794a6b04f
+      - SEED_ADMIN_PASSWORD=Keiko@2026
+      - SEED_TECNICO_PASSWORD=tecnico123
+      - CATALOGO_ECONOMATO_PATH=/app/contexto/data/CATALOGO_ECONOMATO.xlsx
+    volumes:
+      - ./contexto/data:/app/contexto/data
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../devops/frontend.Dockerfile
+      args:
+        - NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+    container_name: enocomatik-frontend
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    restart: always

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { loginController } from '../controllers/authController';
-import { downloadReportController } from '../controllers/reportController';
+import { downloadReportController, downloadEconomatoReportController } from '../controllers/reportController';
 import { authenticateJWT, requireRole } from '../middleware/auth';
-import { ActivoTIC, InsumoEconomato, MovimientoActivo } from '../models/mongoSchemas';
+import { ActivoTIC, InsumoEconomato, MovimientoActivo, MovimientoInsumo } from '../models/mongoSchemas';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -12,6 +12,7 @@ router.post('/auth/login', loginController);
 
 // 2. Ruta de Reportes (Con autenticación y jerarquías internas)
 router.get('/reports/download', authenticateJWT, downloadReportController);
+router.get('/reports/economato', authenticateJWT, downloadEconomatoReportController);
 
 // 3. Ruta de Carga Masiva y Registro Unificado de Facturas/Inventario (Solo Administrador)
 router.post(
@@ -139,6 +140,66 @@ router.post(
             { upsert: true, new: true }
           );
           processed.push({ id: result.id, tipo: 'insumo', ean: ean_codigo, stock_actual: result.cantidad_stock });
+        } else if (item.tipo_registro === 'economato') {
+          const {
+            codigo,
+            descripcion,
+            cantidad,
+            fecha_registro,
+            usuario_registro
+          } = item;
+
+          if (!descripcion) {
+            logger.warn('Falta campo requerido descripcion en item para carga de economato.', { item });
+            continue;
+          }
+
+          // Autogenerar código si no viene
+          const finalEan = codigo ? String(codigo).trim() : `EAN-${Math.floor(100000 + Math.random() * 900000)}`;
+          const finalSku = codigo ? String(codigo).trim() : `SKU-${finalEan}`;
+
+          // Determinar categoría por descripción
+          const descLower = descripcion.toLowerCase();
+          const categoria = (descLower.includes('toner') || descLower.includes('tinta') || descLower.includes('cinta') || descLower.includes('alcohol') || descLower.includes('limpia')) 
+            ? 'Insumo' 
+            : 'Repuesto';
+
+          const cantNum = Number(cantidad || 0);
+
+          // Upsert en MongoDB
+          const result = await InsumoEconomato.findOneAndUpdate(
+            { ean_codigo: finalEan },
+            {
+              $set: {
+                sku_codigo: finalSku,
+                ean_codigo: finalEan,
+                descripcion_articulo: descripcion,
+                categoria,
+                unidad_medida: 'Unidad',
+                factura_referencia: 'CARGA_INICIAL'
+              },
+              $inc: {
+                cantidad_stock: cantNum
+              }
+            },
+            { upsert: true, new: true }
+          );
+
+          // Asentar en Kardex (MovimientoInsumo)
+          await MovimientoInsumo.create({
+            sku_codigo: result.sku_codigo,
+            ean_codigo: result.ean_codigo,
+            descripcion_articulo: result.descripcion_articulo,
+            tipo_movimiento: 'Ingreso',
+            cantidad: cantNum,
+            stock_anterior: result.cantidad_stock - cantNum,
+            stock_nuevo: result.cantidad_stock,
+            usuario_responsable: usuario_registro || 'admin',
+            observacion: 'Carga Masiva - Registro Inicial de Stock',
+            fecha_movimiento: fecha_registro ? new Date(fecha_registro) : new Date()
+          });
+
+          processed.push({ id: result.id, tipo: 'insumo', ean: finalEan, stock_actual: result.cantidad_stock });
         } else {
           logger.warn('Tipo de registro no identificado en carga de inventario.', { item });
         }

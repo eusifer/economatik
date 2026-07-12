@@ -27,6 +27,11 @@ export const loginController = async (req: Request, res: Response) => {
     }
 
     const user = result.rows[0];
+    if (!user.activo) {
+      logger.warn(`Intento de login fallido: Usuario '${username}' desactivado.`, { remote_addr: ip });
+      return res.status(403).json({ message: 'Su cuenta ha sido desactivada por el administrador.' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {

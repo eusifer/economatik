@@ -1,33 +1,60 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Download, RefreshCw, Cpu, Server, Laptop, Archive, TrendingUp, BarChart2, FileSpreadsheet, Plus, FileCode, Save } from 'lucide-react';
+import { 
+  FileText, Cpu, Server, Laptop, Archive, BarChart2, Save, 
+  Users, UserPlus, Edit2, Check, X, Shield, Key,
+  Download, RefreshCw
+} from 'lucide-react';
 
+const AGENCIAS_CMACTACNA = [
+  "OFICINA PRINCIPAL",
+  "AGENCIA CIUDAD NUEVA",
+  "AGENCIA ALTO DE LA ALIANZA",
+  "AGENCIA CORONEL MENDOZA",
+  "AGENCIA GREGORIO ALBARRACIN",
+  "AGENCIA BUSTAMANTE Y RIVERO",
+  "AGENCIA PUERTO MALDONADO",
+  "AGENCIA MARCAVALLE",
+  "AGENCIA CUSCO CENTRAL",
+  "AGENCIA LAZO",
+  "AGENCIA SAN MARTIN",
+  "AGENCIA LEON VELARDE",
+  "AGENCIA CAYMA",
+  "AGENCIA HUEPETUHE",
+  "AGENCIA ILAVE",
+  "AGENCIA MAZUKO",
+  "AGENCIA LA NEGRITA",
+  "AGENCIA ATE",
+  "AGENCIA EL PEDREGAL",
+  "AGENCIA HIGUERETA",
+  "AGENCIA SAN JUAN",
+  "AGENCIA JULIACA",
+  "AGENCIA ILO",
+  "AGENCIA PUNO CENTRAL",
+  "AGENCIA ICA CENTRAL",
+  "AGENCIA LA VICTORIA",
+  "AGENCIA DESAGUADERO",
+  "AGENCIA MOQUEGUA CENTRAL",
+  "AGENCIA IBERIA",
+  "AGENCIA CERRO COLORADO",
+  "AGENCIA TUPAC AMARU"
+];
 
 export default function AdminPage() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
 
-  // Modos de Carga e Inventario
-  const [activeTab, setActiveTab] = useState<'csv' | 'manual'>('csv');
-
-  // Estados para Registro Manual
-  const [regTipo, setRegTipo] = useState<'equipo' | 'insumo'>('equipo');
-  const [regFactura, setRegFactura] = useState('');
-  const [regSerieEan, setRegSerieEan] = useState('');
-  const [regNombreDesc, setRegNombreDesc] = useState('');
-  const [regMarcaCat, setRegMarcaCat] = useState('');
-  const [regModeloUnidad, setRegModeloUnidad] = useState('');
-  const [regCantidad, setRegCantidad] = useState(1);
-  const [regIp, setRegIp] = useState('');
-  const [regEstacion, setRegEstacion] = useState('');
-  const [regUserRed, setRegUserRed] = useState('');
-  const [regUserFinal, setRegUserFinal] = useState('');
-  const [regAgencia, setRegAgencia] = useState('');
-
-  // Estados para Adjunto de Factura
-  const [regAdjuntoB64, setRegAdjuntoB64] = useState<string | null>(null);
-  const [regAdjuntoMime, setRegAdjuntoMime] = useState<string | null>(null);
-  const [regAdjuntoNombre, setRegAdjuntoNombre] = useState<string>('');
+  // Nuevos Estados de Usuarios
+  const [usuarios, setUsuarios] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userUsername, setUserUsername] = useState('');
+  const [userNombreCompleto, setUserNombreCompleto] = useState('');
+  const [userRol, setUserRol] = useState<'administrador' | 'tecnico' | 'invitado'>('tecnico');
+  const [userAgencias, setUserAgencias] = useState<string[]>([]);
+  const [userActivo, setUserActivo] = useState(true);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [modalUsuarioAbierto, setModalUsuarioAbierto] = useState(false);
+  const [tempPasswordGenerada, setTempPasswordGenerada] = useState<string | null>(null);
 
   // Estados para Informes
   const [informeNum, setInformeNum] = useState('');
@@ -45,17 +72,34 @@ export default function AdminPage() {
   const [totalScanners, setTotalScanners] = useState(0);
   const [totalInsumosStock, setTotalInsumosStock] = useState(0);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [recentActivos, setRecentActivos] = useState<any[]>([]);
-  const [recentInsumos, setRecentInsumos] = useState<any[]>([]);
 
-  // Estados para Kardex de Activos
-  const [regFechaCompra, setRegFechaCompra] = useState('');
-  const [serieKardexBusqueda, setSerieKardexBusqueda] = useState('');
-  const [kardexMovimientos, setKardexMovimientos] = useState<any[]>([]);
-  const [loadingKardex, setLoadingKardex] = useState(false);
+  // Estados para limpieza de base de datos
+  const [cleanConfirmText, setCleanConfirmText] = useState('');
+  const [cleaning, setCleaning] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
 
   useEffect(() => {
-    cargarEstadisticas();
+    const userRaw = localStorage.getItem('user');
+    if (userRaw) {
+      try {
+        const u = JSON.parse(userRaw);
+        if (u.rol === 'administrador') {
+          setIsAdmin(true);
+          cargarEstadisticas();
+          cargarUsuarios();
+        } else {
+          window.location.href = '/dashboard';
+        }
+      } catch (e) {
+        window.location.href = '/';
+      }
+    } else {
+      window.location.href = '/';
+    }
+    setCheckingAdmin(false);
   }, []);
 
   const cargarEstadisticas = async () => {
@@ -118,8 +162,6 @@ export default function AdminPage() {
         setTotalLaptops(laptops);
         setTotalScanners(scanners);
         setTotalInsumosStock(totalStock);
-        setRecentActivos(activos);
-        setRecentInsumos(insumos);
       }
     } catch (err) {
       console.error('Error al cargar estadísticas:', err);
@@ -128,277 +170,206 @@ export default function AdminPage() {
     }
   };
 
-  const handleFileAdjuntoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    setRegAdjuntoNombre(file.name);
-    setRegAdjuntoMime(file.type);
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const dataUrl = evt.target?.result as string;
-      if (dataUrl) {
-        // Extraer la parte base64 pura
-        const base64Data = dataUrl.split(',')[1];
-        setRegAdjuntoB64(base64Data);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
 
-  const descargarPlantillaCSV = () => {
-    const csvContent = "tipo_registro,factura,serie_o_ean,nombre_o_descripcion,marca_o_categoria,modelo_o_unidad,cantidad,ip_asignada,nombre_estacion,usuario_red,usuario_final,ubicacion_agencia\n" +
-      "equipo,F001-0001,LEN-9988,PC,LENOVO,ThinkCentre M70q,,192.168.20.50,APT-01OP-50,jsmith,John Smith,San Martin\n" +
-      "insumo,F001-0002,EAN-1001,ROLLER MULTI PURPOSE HP MFP M426,Repuesto,Unidad,5,,,,,";
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "plantilla_carga_economatik.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) return;
-
-      try {
-        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines.length <= 1) {
-          alert('El archivo CSV está vacío o solo contiene la cabecera.');
-          return;
-        }
-
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        const payload: any[] = [];
-
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map(v => v.trim());
-          if (values.length < headers.length) continue;
-
-          const row: any = {};
-          headers.forEach((header, idx) => {
-            row[header] = values[idx];
-          });
-
-          // Mapear campos del CSV a la estructura unificada del backend
-          if (row.tipo_registro === 'equipo') {
-            payload.push({
-              tipo_registro: 'equipo',
-              factura_referencia: row.factura,
-              numero_serie: row.serie_o_ean,
-              tipo_equipo: row.nombre_o_descripcion,
-              marca: row.marca_o_categoria,
-              modelo: row.modelo_o_unidad,
-              ip_asignada: row.ip_asignada || null,
-              nombre_estacion: row.nombre_estacion,
-              usuario_red_asignado: row.usuario_red || 'system',
-              nombre_usuario_final: row.usuario_final || 'Por Asignar',
-              ubicacion_agencia: row.ubicacion_agencia || 'Sede Central'
-            });
-          } else if (row.tipo_registro === 'insumo' || row.tipo_registro === 'repuesto') {
-            payload.push({
-              tipo_registro: row.tipo_registro,
-              factura_referencia: row.factura,
-              ean_codigo: row.serie_o_ean,
-              descripcion_articulo: row.nombre_o_descripcion,
-              categoria: row.marca_o_categoria === 'Insumo' ? 'Insumo' : 'Repuesto',
-              unidad_medida: row.modelo_o_unidad || 'Unidad',
-              cantidad_stock: Number(row.cantidad || 1)
-            });
-          }
-        }
-
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${backendUrl}/api/assets/bulk-upload`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': token ? `Bearer ${token}` : ''
-          },
-          body: JSON.stringify(payload)
-        });
-
-        const result = await res.json();
-        if (res.status === 200) {
-          alert(`Éxito: Se procesaron ${result.processed_count} elementos del CSV correctamente.`);
-          cargarEstadisticas();
-        } else {
-          alert(`Error: ${result.message}`);
-        }
-      } catch (err: any) {
-        alert(`Error al procesar el archivo CSV: ${err.message}`);
-      }
-    };
-    reader.readAsText(file);
-    // Limpiar input
-    e.target.value = '';
-  };
-
-  const guardarRegistroManual = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regFactura || !regSerieEan || !regNombreDesc || !regMarcaCat) {
-      alert('Por favor complete los campos obligatorios: Factura, Serie/EAN, Nombre/Descripción y Marca/Categoría.');
-      return;
-    }
-
-    let payload: any = {};
-    if (regTipo === 'equipo') {
-      if (!regEstacion || !regAgencia) {
-        alert('Por favor complete los campos obligatorios de equipo: Nombre de Estación y Agencia.');
-        return;
-      }
-      payload = {
-        tipo_registro: 'equipo',
-        factura_referencia: regFactura,
-        factura_adjunto_b64: regAdjuntoB64 || null,
-        factura_adjunto_mime: regAdjuntoMime || null,
-        numero_serie: regSerieEan,
-        tipo_equipo: regNombreDesc,
-        marca: regMarcaCat,
-        modelo: regModeloUnidad,
-        ip_asignada: regIp || null,
-        nombre_estacion: regEstacion,
-        usuario_red_asignado: regUserRed || 'system',
-        nombre_usuario_final: regUserFinal || 'Por Asignar',
-        ubicacion_agencia: regAgencia,
-        fecha_compra: regFechaCompra || null
-      };
-    } else {
-      payload = {
-        tipo_registro: 'insumo',
-        factura_referencia: regFactura,
-        factura_adjunto_b64: regAdjuntoB64 || null,
-        factura_adjunto_mime: regAdjuntoMime || null,
-        ean_codigo: regSerieEan,
-        descripcion_articulo: regNombreDesc,
-        categoria: regMarcaCat === 'Insumo' ? 'Insumo' : 'Repuesto',
-        unidad_medida: regModeloUnidad || 'Unidad',
-        cantidad_stock: Number(regCantidad || 1)
-      };
-    }
-
+  const cargarUsuarios = async () => {
+    setLoadingUsers(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${backendUrl}/api/assets/bulk-upload`, {
+      const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : ''
         },
-        body: JSON.stringify([payload]) // Enviar como lote de un solo elemento
+        body: JSON.stringify({
+          query: `
+            query {
+              listUsers {
+                id
+                username
+                rol
+                nombre_completo
+                activo
+                agencias
+              }
+            }
+          `
+        })
       });
-
-      const result = await res.json();
-      if (res.status === 200) {
-        alert('Registro manual guardado y stock actualizado correctamente.');
-        // Limpiar campos selectivos
-        setRegSerieEan('');
-        setRegNombreDesc('');
-        setRegMarcaCat('');
-        setRegModeloUnidad('');
-        setRegCantidad(1);
-        setRegIp('');
-        setRegEstacion('');
-        setRegUserRed('');
-        setRegUserFinal('');
-        setRegAgencia('');
-        setRegFechaCompra('');
-        setRegAdjuntoB64(null);
-        setRegAdjuntoMime(null);
-        setRegAdjuntoNombre('');
-        cargarEstadisticas();
-      } else {
-        alert(`Error: ${result.message}`);
+      const data = await res.json();
+      if (data.data && data.data.listUsers) {
+        setUsuarios(data.data.listUsers);
       }
-    } catch (err: any) {
-      alert(`Error al registrar: ${err.message}`);
+    } catch (err) {
+      console.error('Error al cargar usuarios:', err);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
-  const consultarKardexActivo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!serieKardexBusqueda.trim()) return;
+  const abrirModalCrearUsuario = () => {
+    setUserUsername('');
+    setUserNombreCompleto('');
+    setUserRol('tecnico');
+    setUserAgencias([]);
+    setUserActivo(true);
+    setEditingUserId(null);
+    setTempPasswordGenerada(null);
+    setModalUsuarioAbierto(true);
+  };
 
-    setLoadingKardex(true);
+  const abrirModalEditarUsuario = (u: any) => {
+    setUserUsername(u.username);
+    setUserNombreCompleto(u.nombre_completo);
+    setUserRol(u.rol);
+    setUserAgencias(u.agencias || []);
+    setUserActivo(u.activo);
+    setEditingUserId(u.id);
+    setTempPasswordGenerada(null);
+    setModalUsuarioAbierto(true);
+  };
+
+  const procesarGuardarUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userUsername || !userNombreCompleto) {
+      alert('Por favor complete los campos requeridos.');
+      return;
+    }
+
     try {
+      const token = localStorage.getItem('token');
+      let query = '';
+      let variables: any = {};
+
+      if (editingUserId) {
+        query = `
+          mutation Editar($id: ID!, $nombre: String!, $rol: String!, $activo: Boolean!, $agencias: [String!]!) {
+            updateUser(id: $id, nombreCompleto: $nombre, rol: $rol, activo: $activo, agencias: $agencias)
+          }
+        `;
+        variables = {
+          id: editingUserId,
+          nombre: userNombreCompleto,
+          rol: userRol,
+          activo: userActivo,
+          agencias: userAgencias
+        };
+      } else {
+        query = `
+          mutation Crear($username: String!, $nombre: String!, $rol: String!, $agencias: [String!]!) {
+            createUser(username: $username, nombreCompleto: $nombre, rol: $rol, agencias: $agencias)
+          }
+        `;
+        variables = {
+          username: userUsername,
+          nombre: userNombreCompleto,
+          rol: userRol,
+          agencias: userAgencias
+        };
+      }
+
       const res = await fetch(`${backendUrl}/graphql`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetKardex($serie: String!) {
-              getKardexActivo(serie: $serie) {
-                id
-                numero_serie
-                fecha_movimiento
-                tipo_movimiento
-                agencia_origen
-                agencia_destino
-                usuario_responsable
-                factura_referencia
-                motivo_detalle
-              }
-            }
-          `,
-          variables: { serie: serieKardexBusqueda }
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({ query, variables })
       });
 
       const data = await res.json();
-      if (data.data) {
-        setKardexMovimientos(data.data.getKardexActivo || []);
+      if (data.errors) {
+        alert(`Error: ${data.errors[0].message}`);
       } else {
-        setKardexMovimientos([]);
-      }
-    } catch (err) {
-      console.error(err);
-      setKardexMovimientos([]);
-    } finally {
-      setLoadingKardex(false);
-    }
-  };
-
-  const descargarKardexConsolidado = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Debe iniciar una sesión simulada en el inicio para descargar el reporte.');
-        return;
-      }
-
-      const res = await fetch(`${backendUrl}/api/reports/kardex`, {
-        method: 'GET',
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
+        if (editingUserId) {
+          alert('Usuario actualizado correctamente.');
+          setModalUsuarioAbierto(false);
+          cargarUsuarios();
+        } else {
+          const pass = data.data.createUser;
+          setTempPasswordGenerada(pass);
+          cargarUsuarios();
         }
-      });
-
-      if (res.status === 200) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", "kardex_consolidado_activos.xlsx");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        const err = await res.json();
-        alert(`Error: ${err.message}`);
       }
     } catch (err: any) {
-      alert(`Error de descarga: ${err.message}`);
+      alert(`Error al guardar usuario: ${err.message}`);
     }
   };
+
+  const alternarActivoUsuario = async (u: any) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${backendUrl}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          query: `
+            mutation Editar($id: ID!, $nombre: String!, $rol: String!, $activo: Boolean!, $agencias: [String!]!) {
+              updateUser(id: $id, nombreCompleto: $nombre, rol: $rol, activo: $activo, agencias: $agencias)
+            }
+          `,
+          variables: {
+            id: u.id,
+            nombre: u.nombre_completo,
+            rol: u.rol,
+            activo: !u.activo,
+            agencias: u.agencias
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.errors) {
+        alert(`Error: ${data.errors[0].message}`);
+      } else {
+        alert(`Usuario ${!u.activo ? 'activado' : 'desactivado'} correctamente.`);
+        cargarUsuarios();
+      }
+    } catch (err: any) {
+      alert(`Error al alternar estado: ${err.message}`);
+    }
+  };
+
+  const restablecerContrasenaUsuario = async (u: any) => {
+    if (!confirm(`¿Está seguro de que desea restablecer la contraseña de '${u.username}'? Se generará una contraseña temporal.`)) {
+      return;
+    }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${backendUrl}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          query: `
+            mutation Restablecer($id: ID!) {
+              resetUserPassword(id: $id)
+            }
+          `,
+          variables: { id: u.id }
+        })
+      });
+      const data = await res.json();
+      if (data.errors) {
+        alert(`Error: ${data.errors[0].message}`);
+      } else {
+        const pass = data.data.resetUserPassword;
+        setTempPasswordGenerada(pass);
+        setEditingUserId(null); // Evitar colisión de estados
+        setModalUsuarioAbierto(true); // Desplegar el modal para mostrar la nueva contraseña
+      }
+    } catch (err: any) {
+      alert(`Error al restablecer contraseña: ${err.message}`);
+    }
+  };
+
+
 
   const descargarExcel = async () => {
     try {
@@ -561,6 +532,93 @@ export default function AdminPage() {
     }
   };
 
+  const handleSembrarDatos = async () => {
+    if (!confirm('¿Desea sembrar el catálogo inicial de economato y los activos semilla en la base de datos?')) return;
+    
+    setSeeding(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${backendUrl}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          query: `
+            mutation {
+              sembrarDatosIniciales
+            }
+          `
+        })
+      });
+      
+      const data = await res.json();
+      if (data.errors) {
+        alert(`Error: ${data.errors[0].message}`);
+      } else if (data.data && data.data.sembrarDatosIniciales) {
+        alert('Datos semilla y catálogo de economato cargados exitosamente.');
+        window.location.reload();
+      } else {
+        alert('No se pudo completar la siembra de datos.');
+      }
+    } catch (err: any) {
+      alert(`Error de red al sembrar base de datos: ${err.message}`);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleCleanDatabase = async () => {
+    if (cleanConfirmText !== 'CONFIRMAR') return;
+    if (!confirm('¿Está absolutamente seguro de proceder con la limpieza total de datos de prueba? Se borrará todo el historial.')) return;
+    
+    setCleaning(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${backendUrl}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          query: `
+            mutation {
+              limpiarDatosPrueba
+            }
+          `
+        })
+      });
+      
+      const data = await res.json();
+      if (data.errors) {
+        alert(`Error: ${data.errors[0].message}`);
+      } else if (data.data && data.data.limpiarDatosPrueba) {
+        alert('Base de datos depurada exitosamente. El sistema está listo para producción.');
+        setCleanConfirmText('');
+        window.location.reload();
+      } else {
+        alert('No se pudo completar la limpieza de datos.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de red al intentar limpiar la base de datos.');
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  if (checkingAdmin) {
+    return (
+      <div className="p-12 text-center text-xs text-slate-500 animate-pulse">
+        Verificando nivel de autorización...
+      </div>
+    );
+  }
+
+  if (!isAdmin) return null;
+
   return (
     <div className="space-y-12">
       <div className="flex justify-between items-center">
@@ -569,12 +627,6 @@ export default function AdminPage() {
           <p className="text-sm text-slate-400 mt-1">Gestión avanzada de inventarios, reportes de auditoría y ciclos de renovación.</p>
         </div>
         <div className="flex gap-4">
-          <button
-            onClick={descargarKardexConsolidado}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-650 hover:bg-blue-600 transition rounded-lg text-sm font-bold text-white shadow-lg shadow-blue-500/20"
-          >
-            <FileSpreadsheet className="w-4 h-4" /> Descargar Kardex Consolidado (Excel)
-          </button>
           <button
             onClick={descargarExcel}
             className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 transition rounded-lg text-sm font-bold text-white shadow-lg shadow-green-500/20"
@@ -636,296 +688,229 @@ export default function AdminPage() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Carga e Ingreso de Inventarios (Izquierda) */}
+        {/* Usuarios RBAC (Izquierda) */}
         <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-4">
-          <div className="flex border-b border-slate-800">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-400" /> Control de Accesos y Roles RBAC
+            </h3>
             <button
-              onClick={() => setActiveTab('csv')}
-              className={`flex-1 pb-3 text-sm font-semibold transition ${activeTab === 'csv' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'
-                }`}
+              onClick={abrirModalCrearUsuario}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-650 hover:bg-blue-600 rounded-lg text-[10px] font-bold text-white transition"
             >
-              Carga por Lotes CSV
-            </button>
-            <button
-              onClick={() => setActiveTab('manual')}
-              className={`flex-1 pb-3 text-sm font-semibold transition ${activeTab === 'manual' ? 'text-blue-400 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200'
-                }`}
-            >
-              Registro Manual Individual
+              <UserPlus className="w-3.5 h-3.5" /> Nuevo Usuario
             </button>
           </div>
 
-          {activeTab === 'csv' && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Carga Masiva de Facturas (.csv)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Seleccione un archivo delimitado por comas (.csv) correspondiente al lote de la Factura de Adquisición recibida.
-                El sistema actualizará el stock de repuestos e indexará nuevos equipos en la CMDB.
-              </p>
+          <div className="border border-slate-800 rounded-lg overflow-hidden bg-slate-950/20">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="bg-slate-950/80 border-b border-slate-850 text-slate-400 font-semibold uppercase">
+                  <th className="p-2">Usuario</th>
+                  <th className="p-2">Nombre Completo</th>
+                  <th className="p-2">Rol</th>
+                  <th className="p-2 text-center">Estado</th>
+                  <th className="p-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-850">
+                {loadingUsers ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-slate-500 animate-pulse">Cargando cuentas...</td>
+                  </tr>
+                ) : usuarios.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-slate-500">No hay usuarios registrados.</td>
+                  </tr>
+                ) : (
+                  usuarios.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-900/40">
+                      <td className="p-2 font-bold text-slate-200">{u.username}</td>
+                      <td className="p-2 text-slate-300">{u.nombre_completo}</td>
+                      <td className="p-2">
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${u.rol === 'administrador' ? 'bg-red-950 text-red-400 border border-red-900/40' :
+                          u.rol === 'tecnico' ? 'bg-blue-950 text-blue-400 border border-blue-900/40' :
+                            'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}>
+                          {u.rol.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${u.activo ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'
+                          }`}>
+                          {u.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="p-2 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => abrirModalEditarUsuario(u)}
+                            className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => restablecerContrasenaUsuario(u)}
+                            className="p-1 bg-amber-950/60 hover:bg-amber-900 text-amber-400 rounded border border-amber-900/30"
+                            title="Restablecer Contraseña"
+                          >
+                            <Key className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => alternarActivoUsuario(u)}
+                            className={`p-1 rounded text-white ${u.activo ? 'bg-rose-950 hover:bg-rose-900 text-rose-400' : 'bg-emerald-950 hover:bg-emerald-900 text-emerald-400'}`}
+                            title={u.activo ? 'Desactivar' : 'Activar'}
+                          >
+                            {u.activo ? <X className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 flex flex-col items-center justify-center gap-3">
-                <Upload className="w-8 h-8 text-slate-500" />
-                <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-xs font-semibold px-4 py-2 rounded-lg transition text-slate-200">
-                  Seleccionar Archivo CSV
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCSVUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
+          {/* Modal de CRUD de Usuario */}
+          {modalUsuarioAbierto && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-sm p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-blue-400" />
+                    {editingUserId ? 'Editar Cuenta de Acceso' : 'Registrar Nueva Cuenta'}
+                  </h4>
+                  <button
+                    onClick={() => setModalUsuarioAbierto(false)}
+                    className="text-slate-400 hover:text-white text-sm font-bold"
+                  >
+                    &times;
+                  </button>
+                </div>
 
-              <div className="flex justify-between items-center bg-slate-950/40 p-3 rounded-lg border border-slate-850">
-                <span className="text-[10px] text-slate-400 font-mono">plantilla_carga_economatik.csv</span>
-                <button
-                  onClick={descargarPlantillaCSV}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-650 hover:bg-blue-600 rounded-lg text-xs font-bold text-white transition"
-                >
-                  <Download className="w-3.5 h-3.5" /> Descargar Formato
-                </button>
+                {tempPasswordGenerada && (
+                  <div className="p-3 bg-blue-950/30 border border-blue-900 text-blue-300 rounded-lg text-xs space-y-1">
+                    <div className="font-bold">⚠️ Credencial temporal generada:</div>
+                    <p>Copie la contraseña antes de cerrar este aviso. No se mostrará de nuevo.</p>
+                    <div className="mt-2 bg-slate-950 p-2 rounded text-center text-sm font-mono font-bold select-all tracking-wider text-white border border-slate-850">
+                      {tempPasswordGenerada}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setTempPasswordGenerada(null);
+                        setModalUsuarioAbierto(false);
+                        cargarUsuarios();
+                      }}
+                      className="w-full mt-2 py-1 bg-blue-650 hover:bg-blue-600 text-white rounded text-[10px] font-bold"
+                    >
+                      Entendido y Copiado
+                    </button>
+                  </div>
+                )}
+
+                {!tempPasswordGenerada && (
+                  <form onSubmit={procesarGuardarUsuario} className="space-y-3 text-left text-xs">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 font-semibold">Usuario de Red (Login) *</label>
+                      <input
+                        type="text"
+                        required
+                        disabled={!!editingUserId}
+                        placeholder="ej. jsmith"
+                        value={userUsername}
+                        onChange={(e) => setUserUsername(e.target.value.toLowerCase())}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 font-semibold">Nombre Completo *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ej. John Smith Valencia"
+                        value={userNombreCompleto}
+                        onChange={(e) => setUserNombreCompleto(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 font-semibold">Rol del Sistema *</label>
+                      <select
+                        value={userRol}
+                        onChange={(e) => setUserRol(e.target.value as any)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="tecnico">Técnico de Campo</option>
+                        <option value="administrador">Administrador Patrimonial</option>
+                        <option value="invitado">Invitado (Solo Lectura)</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] text-slate-400 font-semibold">Agencias a Cargo *</label>
+                      <div className="max-h-32 overflow-y-auto bg-slate-950 p-2 rounded-lg border border-slate-800 space-y-1.5">
+                        {AGENCIAS_CMACTACNA.map((ag) => {
+                          const isChecked = userAgencias.includes(ag);
+                          return (
+                            <label key={ag} className="flex items-center gap-2 text-[10px] text-slate-300 cursor-pointer hover:text-white transition">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setUserAgencias(userAgencias.filter((a) => a !== ag));
+                                  } else {
+                                    setUserAgencias([...userAgencias, ag]);
+                                  }
+                                }}
+                                className="rounded border-slate-800 bg-slate-900 text-blue-600 focus:ring-blue-500"
+                              />
+                              {ag}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[9px] text-slate-500">Seleccione las sedes de la CMAC Tacna bajo su jurisdicción.</p>
+                    </div>
+
+                    {editingUserId && (
+                      <div className="flex items-center gap-2 py-1">
+                        <input
+                          type="checkbox"
+                          id="user-activo-chk"
+                          checked={userActivo}
+                          onChange={(e) => setUserActivo(e.target.checked)}
+                          className="rounded border-slate-800 bg-slate-950 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="user-activo-chk" className="text-[10px] text-slate-300 font-semibold cursor-pointer">
+                          Cuenta de acceso habilitada (Activo)
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setModalUsuarioAbierto(false)}
+                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-bold"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-3.5 py-1.5 bg-blue-650 hover:bg-blue-600 text-white rounded-lg text-[10px] font-bold"
+                      >
+                        Guardar Cambios
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
-          )}
-
-          {activeTab === 'manual' && (
-            <form onSubmit={guardarRegistroManual} className="space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Plus className="w-5 h-5 text-blue-400" /> Registro de Adquisición Manual
-              </h3>
-
-              <div className="grid grid-cols-3 gap-3">
-                {/* Tipo de Registro */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-tipo" className="text-xs text-slate-400 font-semibold">Tipo de Artículo *</label>
-                  <select
-                    id="reg-tipo"
-                    value={regTipo}
-                    onChange={(e) => setRegTipo(e.target.value as 'equipo' | 'insumo')}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="equipo">Equipo TIC</option>
-                    <option value="insumo">Insumo/Repuesto</option>
-                  </select>
-                </div>
-
-                {/* Factura Referencia */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-factura" className="text-xs text-slate-400 font-semibold">Factura de Compra *</label>
-                  <input
-                    id="reg-factura"
-                    type="text"
-                    placeholder="Ej. F001-0004523"
-                    value={regFactura}
-                    onChange={(e) => setRegFactura(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Fecha Compra */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-fechacompra" className="text-xs text-slate-400 font-semibold">Fecha Compra</label>
-                  <input
-                    id="reg-fechacompra"
-                    type="date"
-                    value={regFechaCompra}
-                    onChange={(e) => setRegFechaCompra(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* Serie o EAN */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-serie" className="text-xs text-slate-400 font-semibold">
-                    {regTipo === 'equipo' ? 'Número de Serie *' : 'Código EAN / SKU *'}
-                  </label>
-                  <input
-                    id="reg-serie"
-                    type="text"
-                    placeholder={regTipo === 'equipo' ? 'Serie única del hardware' : 'Código de barras de repuesto'}
-                    value={regSerieEan}
-                    onChange={(e) => setRegSerieEan(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Nombre o Descripción */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-nombre" className="text-xs text-slate-400 font-semibold">
-                    {regTipo === 'equipo' ? 'Tipo de Equipo *' : 'Descripción de Artículo *'}
-                  </label>
-                  <input
-                    id="reg-nombre"
-                    type="text"
-                    placeholder={regTipo === 'equipo' ? 'Ej. CPU, Impresora, Switch' : 'Ej. Aceite fusor, Roller HP'}
-                    value={regNombreDesc}
-                    onChange={(e) => setRegNombreDesc(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* Marca o Categoría */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-marca" className="text-xs text-slate-400 font-semibold">
-                    {regTipo === 'equipo' ? 'Marca *' : 'Categoría *'}
-                  </label>
-                  {regTipo === 'equipo' ? (
-                    <input
-                      id="reg-marca"
-                      type="text"
-                      placeholder="Ej. Lenovo, Epson"
-                      value={regMarcaCat}
-                      onChange={(e) => setRegMarcaCat(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                    />
-                  ) : (
-                    <select
-                      id="reg-marca"
-                      value={regMarcaCat}
-                      onChange={(e) => setRegMarcaCat(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Seleccionar...</option>
-                      <option value="Repuesto">Repuesto</option>
-                      <option value="Insumo">Insumo</option>
-                    </select>
-                  )}
-                </div>
-
-                {/* Modelo o Unidad Medida */}
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-modelo" className="text-xs text-slate-400 font-semibold">
-                    {regTipo === 'equipo' ? 'Modelo *' : 'Unidad de Medida *'}
-                  </label>
-                  <input
-                    id="reg-modelo"
-                    type="text"
-                    placeholder={regTipo === 'equipo' ? 'Ej. ThinkCentre M70q' : 'Ej. Unidad, Litro, Caja'}
-                    value={regModeloUnidad}
-                    onChange={(e) => setRegModeloUnidad(e.target.value)}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Cargar Adjunto (Factura Imagen/PDF) */}
-              <div className="flex flex-col gap-1.5 border-t border-slate-850 pt-3">
-                <label className="text-xs text-slate-400 font-semibold">Factura Digital Adjunta (Opcional - Imagen o PDF)</label>
-                <div className="flex items-center gap-3">
-                  <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-xs font-semibold px-4 py-2 rounded-lg transition text-slate-200">
-                    Subir PDF o Imagen
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      onChange={handleFileAdjuntoChange}
-                      className="hidden"
-                    />
-                  </label>
-                  {regAdjuntoNombre && (
-                    <span className="text-[10px] text-slate-350 font-mono truncate max-w-[200px] bg-slate-950/60 px-2 py-1.5 rounded-lg border border-slate-850">
-                      📎 {regAdjuntoNombre}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Campos específicos de Insumos: Cantidad */}
-              {regTipo === 'insumo' && (
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="reg-cantidad" className="text-xs text-slate-400 font-semibold">Cantidad a Ingresar / Sumar al Stock *</label>
-                  <input
-                    id="reg-cantidad"
-                    type="number"
-                    min={1}
-                    value={regCantidad}
-                    onChange={(e) => setRegCantidad(Number(e.target.value))}
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              )}
-
-              {/* Campos específicos de Equipos */}
-              {regTipo === 'equipo' && (
-                <div className="space-y-3 bg-slate-950/30 p-3 rounded-lg border border-slate-850">
-                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Detalles de Sede e Identificación en Red</h4>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="reg-ip" className="text-[10px] text-slate-400">Dirección IP Asignada</label>
-                      <input
-                        id="reg-ip"
-                        type="text"
-                        placeholder="Ej. 192.168.20.125"
-                        value={regIp}
-                        onChange={(e) => setRegIp(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-white"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="reg-estacion" className="text-[10px] text-slate-400">Nombre Estación (Host) *</label>
-                      <input
-                        id="reg-estacion"
-                        type="text"
-                        placeholder="Ej. APT-OP-125"
-                        value={regEstacion}
-                        onChange={(e) => setRegEstacion(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="reg-userred" className="text-[10px] text-slate-400">Usuario Red (Active Dir.)</label>
-                      <input
-                        id="reg-userred"
-                        type="text"
-                        placeholder="Ej. jvalencia"
-                        value={regUserRed}
-                        onChange={(e) => setRegUserRed(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-white"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="reg-userfinal" className="text-[10px] text-slate-400">Usuario Final (Persona)</label>
-                      <input
-                        id="reg-userfinal"
-                        type="text"
-                        placeholder="Ej. Juan Valencia"
-                        value={regUserFinal}
-                        onChange={(e) => setRegUserFinal(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor="reg-agencia" className="text-[10px] text-slate-400">Ubicación Agencia / Sede *</label>
-                    <input
-                      id="reg-agencia"
-                      type="text"
-                      placeholder="Ej. Sede Central, Agencia San Martin"
-                      value={regAgencia}
-                      onChange={(e) => setRegAgencia(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-white"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-1.5 py-2 bg-blue-650 hover:bg-blue-600 rounded-lg text-xs font-bold text-white transition shadow-md shadow-blue-500/10"
-              >
-                <Save className="w-4 h-4" /> Registrar en Inventario
-              </button>
-            </form>
           )}
         </div>
 
@@ -1064,219 +1049,68 @@ export default function AdminPage() {
         </form>
       </section>
 
-      {/* Módulo de Consulta de Facturas y Equipos Adquiridos */}
-      <section className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 space-y-6">
-        <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <FileText className="w-5 h-5 text-emerald-400" /> Registro y Visualización de Facturas de Compra
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Consulte las facturas e imágenes/PDFs de compra asociados a los activos en la CMDB y a los repuestos del economato central.
-          </p>
-        </div>
+      {/* Sección Carga de Catálogo Inicial y Datos Semilla */}
+      <section className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+        <h2 className="text-base font-bold text-blue-400 flex items-center gap-2">
+          📥 Carga de Catálogo Inicial y Datos Semilla
+        </h2>
+        <p className="text-xs text-slate-400">
+          Esta acción poblará la base de datos vacía cargando de manera dinámica el catálogo maestro institucional de insumos y repuestos del Economato (`CATALOGO_ECONOMATO.xlsx`) y registrará los activos semilla de hardware de la CMDB.
+        </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Equipos con Factura */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equipos en Parque TIC (CMDB)</h3>
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
-                    <th className="p-3">Serie</th>
-                    <th className="p-3">Equipo</th>
-                    <th className="p-3">Factura</th>
-                    <th className="p-3">Documento</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentActivos.filter(a => a.factura_referencia).length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="p-3 text-center text-slate-500 italic">No hay facturas de equipos registradas.</td>
-                    </tr>
-                  ) : (
-                    recentActivos.filter(a => a.factura_referencia).map((a: any) => (
-                      <tr key={a.numero_serie} className="border-b border-slate-850 hover:bg-slate-900/40 transition">
-                        <td className="p-3 font-mono font-bold text-slate-350">{a.numero_serie}</td>
-                        <td className="p-3">
-                          <div className="text-slate-200 font-medium">{a.tipo_equipo}</div>
-                          <div className="text-[10px] text-slate-450">{a.marca} - {a.modelo}</div>
-                        </td>
-                        <td className="p-3 text-slate-300 font-mono">{a.factura_referencia}</td>
-                        <td className="p-3">
-                          {a.factura_adjunto_b64 ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const byteCharacters = atob(a.factura_adjunto_b64);
-                                const byteNumbers = new Array(byteCharacters.length);
-                                for (let i = 0; i < byteCharacters.length; i++) {
-                                  byteNumbers[i] = byteCharacters.charCodeAt(i);
-                                }
-                                const byteArray = new Uint8Array(byteNumbers);
-                                const blob = new Blob([byteArray], { type: a.factura_adjunto_mime || 'application/pdf' });
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, '_blank');
-                              }}
-                              className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-900/40 text-[10px] font-bold text-blue-400 rounded-lg transition"
-                            >
-                              Ver Adjunto
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-slate-600 italic">Sin archivo</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+        <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-900/30">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="text-xs text-blue-300">
+              Presione el botón para sincronizar el catálogo de economato inicial desde el archivo local en el servidor.
             </div>
-          </div>
-
-          {/* Insumos con Factura */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Insumos y Repuestos (Economato)</h3>
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
-                    <th className="p-3">EAN</th>
-                    <th className="p-3">Descripción</th>
-                    <th className="p-3">Factura</th>
-                    <th className="p-3">Stock / Doc</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentInsumos.filter(i => i.factura_referencia).length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="p-3 text-center text-slate-500 italic">No hay facturas de insumos registradas.</td>
-                    </tr>
-                  ) : (
-                    recentInsumos.filter(i => i.factura_referencia).map((i: any) => (
-                      <tr key={i.ean_codigo} className="border-b border-slate-850 hover:bg-slate-900/40 transition">
-                        <td className="p-3 font-mono font-bold text-slate-350">{i.ean_codigo}</td>
-                        <td className="p-3 text-slate-200 font-medium">{i.descripcion_articulo}</td>
-                        <td className="p-3 text-slate-300 font-mono">{i.factura_referencia}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-3">
-                            <span className="text-slate-350 font-bold bg-slate-950/60 px-2 py-0.5 rounded border border-slate-850 text-[10px]">{i.cantidad_stock} {i.unidad_medida}</span>
-                            {i.factura_adjunto_b64 ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const byteCharacters = atob(i.factura_adjunto_b64);
-                                  const byteNumbers = new Array(byteCharacters.length);
-                                  for (let i = 0; i < byteCharacters.length; i++) {
-                                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                                  }
-                                  const byteArray = new Uint8Array(byteNumbers);
-                                  const blob = new Blob([byteArray], { type: i.factura_adjunto_mime || 'application/pdf' });
-                                  const url = URL.createObjectURL(blob);
-                                  window.open(url, '_blank');
-                                }}
-                                className="px-2.5 py-1 bg-blue-950/60 hover:bg-blue-900/80 border border-blue-900/40 text-[10px] font-bold text-blue-400 rounded-lg transition"
-                              >
-                                Ver Adjunto
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-600 italic">Sin archivo</span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            
+            <button
+              type="button"
+              onClick={handleSembrarDatos}
+              disabled={seeding}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 transition rounded-lg text-xs font-bold text-white shadow-lg shadow-blue-900/20"
+            >
+              {seeding ? 'Cargando Semillas...' : 'Cargar Catálogo Inicial'}
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Módulo de Kardex Logístico de Activos TIC */}
-      <section className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800 space-y-6">
-        <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-blue-400" /> Kardex Logístico e Historial de Movimientos (Trazabilidad)
-          </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Consulte la línea de tiempo completa, asignaciones, transferencias de agencias y bajas de cualquier activo TIC mediante su número de serie.
-          </p>
-        </div>
+      {/* Sección Limpieza de Base de Datos para Producción */}
+      <section className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+        <h2 className="text-base font-bold text-red-400 flex items-center gap-2">
+          ⚠️ Limpieza de Base de Datos (Puesta en Producción)
+        </h2>
+        <p className="text-xs text-slate-400">
+          Esta acción **eliminará permanentemente todos los registros de prueba** de la base de datos (Tickets, Incidencias, Custodias del Economato, Historiales, Kardex de Activos y de Insumos). Mantendrá únicamente la cuenta activa del Administrador (`admin`) para permitir la carga y el registro de la información real del inventario corporativo.
+        </p>
 
-        <form onSubmit={consultarKardexActivo} className="flex gap-3 max-w-md">
-          <input
-            type="text"
-            placeholder="Ingrese Número de Serie (Ej. HP-8877)"
-            value={serieKardexBusqueda}
-            onChange={(e) => setSerieKardexBusqueda(e.target.value)}
-            className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:ring-2 focus:ring-blue-500 font-mono font-bold"
-          />
-          <button
-            type="submit"
-            disabled={loadingKardex}
-            className="px-4 py-2 bg-blue-650 hover:bg-blue-600 disabled:bg-slate-800 rounded-lg text-xs font-bold text-white transition flex items-center gap-1.5"
-          >
-            {loadingKardex ? 'Buscando...' : 'Consultar Kardex'}
-          </button>
-        </form>
-
-        {kardexMovimientos.length > 0 ? (
-          <div className="relative border-l-2 border-slate-800 ml-4 pl-6 space-y-6 py-2">
-            {kardexMovimientos.map((mov) => (
-              <div key={mov.id} className="relative">
-                {/* Indicador / Viñeta de la Línea de Tiempo */}
-                <span className={`absolute -left-[31px] top-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 bg-slate-950 ${mov.tipo_movimiento === 'Ingreso' ? 'border-emerald-500 text-emerald-500' :
-                    mov.tipo_movimiento === 'Transferencia' ? 'border-blue-500 text-blue-500' :
-                      mov.tipo_movimiento === 'Baja' ? 'border-red-500 text-red-500' :
-                        'border-purple-500 text-purple-500'
-                  }`} />
-
-                {/* Contenido del Hito */}
-                <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-850 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${mov.tipo_movimiento === 'Ingreso' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/60' :
-                        mov.tipo_movimiento === 'Transferencia' ? 'bg-blue-950/60 text-blue-400 border border-blue-900/60' :
-                          mov.tipo_movimiento === 'Baja' ? 'bg-red-950/60 text-red-400 border border-red-900/60' :
-                            'bg-purple-950/60 text-purple-400 border border-purple-900/60'
-                      }`}>
-                      {mov.tipo_movimiento.toUpperCase()}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono font-bold">
-                      {new Date(Number(mov.fecha_movimiento) ? Number(mov.fecha_movimiento) : mov.fecha_movimiento).toLocaleString()}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-200 font-medium">
-                    {mov.motivo_detalle}
-                  </p>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-900 text-[10px] text-slate-400">
-                    <div>
-                      <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Agencia / Sede</span>
-                      <span className="font-medium text-slate-350">
-                        {mov.agencia_origen ? `${mov.agencia_origen} ➔ ` : ''}{mov.agencia_destino}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Responsable</span>
-                      <span className="font-mono text-slate-350 font-bold">{mov.usuario_responsable}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Sustento / Factura</span>
-                      <span className="font-mono text-slate-350">{mov.factura_referencia || 'N/A'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+        <div className="p-4 rounded-xl bg-red-950/20 border border-red-900/30 space-y-4">
+          <div className="text-xs text-red-400 font-bold">
+            ¡ADVERTENCIA! Esta operación no se puede deshacer. Por motivos de seguridad, escriba la palabra <span className="underline font-mono text-white select-all">CONFIRMAR</span> para proceder.
           </div>
-        ) : (
-          serieKardexBusqueda && !loadingKardex && (
-            <p className="text-xs text-slate-500 italic pl-2">No se encontraron movimientos registrados en el Kardex para la serie ingresada.</p>
-          )
-        )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="md:col-span-3">
+              <input
+                type="text"
+                placeholder="Escriba CONFIRMAR aquí..."
+                value={cleanConfirmText}
+                onChange={(e) => setCleanConfirmText(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-xs text-white focus:ring-2 focus:ring-red-500 font-mono"
+              />
+            </div>
+            
+            <button
+              type="button"
+              onClick={handleCleanDatabase}
+              disabled={cleanConfirmText !== 'CONFIRMAR' || cleaning}
+              className="w-full py-2.5 bg-red-750 hover:bg-red-700 disabled:bg-slate-800 disabled:text-slate-500 transition rounded-lg text-xs font-bold text-white shadow-lg shadow-red-900/20"
+            >
+              {cleaning ? 'Limpiando...' : 'Iniciar Limpieza'}
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );

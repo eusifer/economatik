@@ -96,7 +96,7 @@ import { logger, getClientIp } from '../utils/logger';
 export interface AuthUser {
   id: string;
   username: string;
-  rol: 'administrador' | 'tecnico';
+  rol: 'administrador' | 'tecnico' | 'invitado';
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -123,7 +123,7 @@ export const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: 
   }
 };
 
-export const requireRole = (allowedRoles: ('administrador' | 'tecnico')[]) => {
+export const requireRole = (allowedRoles: ('administrador' | 'tecnico' | 'invitado')[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const ip = getClientIp(req);
     

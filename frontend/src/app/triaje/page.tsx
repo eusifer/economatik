@@ -3,9 +3,44 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, RefreshCw, Save, PhoneCall, UserCheck, History, Settings } from 'lucide-react';
 
+const AGENCIAS_CMACTACNA = [
+  "OFICINA PRINCIPAL",
+  "AGENCIA CIUDAD NUEVA",
+  "AGENCIA ALTO DE LA ALIANZA",
+  "AGENCIA CORONEL MENDOZA",
+  "AGENCIA GREGORIO ALBARRACIN",
+  "AGENCIA BUSTAMANTE Y RIVERO",
+  "AGENCIA PUERTO MALDONADO",
+  "AGENCIA MARCAVALLE",
+  "AGENCIA CUSCO CENTRAL",
+  "AGENCIA LAZO",
+  "AGENCIA SAN MARTIN",
+  "AGENCIA LEON VELARDE",
+  "AGENCIA CAYMA",
+  "AGENCIA HUEPETUHE",
+  "AGENCIA ILAVE",
+  "AGENCIA MAZUKO",
+  "AGENCIA LA NEGRITA",
+  "AGENCIA ATE",
+  "AGENCIA EL PEDREGAL",
+  "AGENCIA HIGUERETA",
+  "AGENCIA SAN JUAN",
+  "AGENCIA JULIACA",
+  "AGENCIA ILO",
+  "AGENCIA PUNO CENTRAL",
+  "AGENCIA ICA CENTRAL",
+  "AGENCIA LA VICTORIA",
+  "AGENCIA DESAGUADERO",
+  "AGENCIA MOQUEGUA CENTRAL",
+  "AGENCIA IBERIA",
+  "AGENCIA CERRO COLORADO",
+  "AGENCIA TUPAC AMARU"
+];
+
 export default function TriajePage() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
   const [serieBusqueda, setSerieBusqueda] = useState('');
+  const [activoSerieReal, setActivoSerieReal] = useState('');
   const [registroContingencia, setRegistroContingencia] = useState(false);
   const [esCritico, setEsCritico] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -78,6 +113,7 @@ export default function TriajePage() {
       const data = await res.json();
       if (data.data && data.data.searchActivo) {
         const activo = data.data.searchActivo;
+        setActivoSerieReal(activo.numero_serie);
         setTipoEquipo(activo.tipo_equipo);
         setMarcaModelo(`${activo.marca} - ${activo.modelo}`);
         setUsuarioFinal(activo.nombre_usuario_final);
@@ -91,6 +127,7 @@ export default function TriajePage() {
         setCantidadIntervenciones(data.data.countTicketsActivo || 0);
         setHistorialTickets(data.data.getHistorialActivo || []);
       } else {
+        setActivoSerieReal('');
         limpiarCamposAutocompletados();
         setEsCritico(false);
       }
@@ -103,6 +140,7 @@ export default function TriajePage() {
 
   const limpiarCamposAutocompletados = () => {
     if (!registroContingencia) {
+      setActivoSerieReal('');
       setTipoEquipo('');
       setMarcaModelo('');
       setUsuarioFinal('');
@@ -171,7 +209,7 @@ export default function TriajePage() {
             sintoma: descripcion,
             prioridad,
             agencia: agenciaSede,
-            serie: registroContingencia ? null : serieBusqueda,
+            serie: registroContingencia ? null : (activoSerieReal || serieBusqueda),
             usuarioReporta: usuarioReporta || null,
             status: ticketStatus,
             contingencia: registroContingencia,
@@ -320,12 +358,18 @@ export default function TriajePage() {
               <input
                 id="tipo"
                 type="text"
+                list="tipos-equipos"
                 readOnly={!registroContingencia}
                 value={tipoEquipo}
                 placeholder="Autodetectado"
                 onChange={(e) => setTipoEquipo(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white opacity-70"
+                className={`bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white transition-opacity ${!registroContingencia ? 'opacity-50 cursor-not-allowed' : 'opacity-100'}`}
               />
+              <datalist id="tipos-equipos">
+                <option value="CPU" />
+                <option value="LAPTOP" />
+                <option value="IMPRESORA" />
+              </datalist>
             </div>
 
             {/* Marca / Modelo */}
@@ -338,7 +382,7 @@ export default function TriajePage() {
                 value={marcaModelo}
                 placeholder="Autodetectado"
                 onChange={(e) => setMarcaModelo(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white opacity-70"
+                className={`bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white transition-opacity ${!registroContingencia ? 'opacity-50 cursor-not-allowed' : 'opacity-100'}`}
               />
             </div>
           </div>
@@ -354,7 +398,7 @@ export default function TriajePage() {
                 value={usuarioFinal}
                 placeholder="Autodetectado"
                 onChange={(e) => setUsuarioFinal(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white opacity-70"
+                className={`bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white transition-opacity ${!registroContingencia ? 'opacity-50 cursor-not-allowed' : 'opacity-100'}`}
               />
             </div>
 
@@ -364,12 +408,18 @@ export default function TriajePage() {
               <input
                 id="sede"
                 type="text"
+                list="cmac-agencias"
                 readOnly={!registroContingencia}
                 value={agenciaSede}
-                placeholder={registroContingencia ? 'Ingresar sede física' : 'Autodetectado'}
+                placeholder={registroContingencia ? 'Ingresar sede física (ej. AGENCIA CAYMA)' : 'Autodetectado'}
                 onChange={(e) => setAgenciaSede(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white opacity-70"
+                className={`bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white transition-opacity ${!registroContingencia ? 'opacity-50 cursor-not-allowed' : 'opacity-100'}`}
               />
+              <datalist id="cmac-agencias">
+                {AGENCIAS_CMACTACNA.map(ag => (
+                  <option key={ag} value={ag} />
+                ))}
+              </datalist>
             </div>
           </div>
         </div>

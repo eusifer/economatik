@@ -286,6 +286,30 @@ El soporte de incidentes se gestiona mediante un tablero Kanban estricto que sig
 
 ---
 
+### 2.5. Gestión de Asignaciones, Actas de Cargo y Reemplazos en Kanban
+
+#### Módulo de Asignaciones a Agencia
+Este módulo permite registrar el destino final de un activo TIC (desde los almacenes de la Municipalidad) a una oficina/sede específica. 
+1. **Asignación:** Se selecciona un activo en estado `'Pendiente de Asignación'`. Se abre un modal solicitando el Nombre del Destinatario (empleado receptor), Cargo del Destinatario y Nombre del Jefe Inmediato (que dará el V°B°).
+2. **Acta de Entrega:** Al completarse la asignación, se genera automáticamente una plantilla en formato de Acta de Entrega con código único y detalles del hardware. Este documento está optimizado mediante Print CSS (HTML estándar con `@media print`) para guardarse directamente en formato PDF o imprimirse físicamente en formato A4 sin dependencias complejas.
+3. **Control de Firmas:** El acta recién creada inicia en estado `'Pendiente de Firma'`. Una vez que el empleado o jefe devuelven el acta firmada, el administrador o técnico hace clic en **Firmada** en el listado para actualizar el estado del acta en la CMDB a `'Firmado y Devuelto'`.
+4. **Trazabilidad (Kardex):** Cada asignación escribe de forma transparente una entrada en la colección `MovimientoActivo` (PostgreSQL/Mongoose) con `tipo_movimiento: 'Transferencia'` asociando el técnico de cargo y los detalles del traslado, garantizando auditorías transparentes.
+
+#### Flujo de Reemplazo Tecnológico Sugerido (Kanban)
+Cuando un técnico mueve un ticket a `'Done'` y el resumen o diagnóstico contiene el término "reemplazo" (o mediante el botón flotante **Registrar Cambio de Equipo**), se activa la automatización de herencia en caliente:
+* El sistema solicita elegir un activo de reemplazo disponible en el Economato de Equipos (`'Economato-Equipos'` o `'Almacen-TIC'`).
+* Al confirmar, se ejecuta en una sola transacción:
+  1. El CPU nuevo hereda la dirección IP y el hostname del CPU dañado.
+  2. El CPU nuevo se asigna a la agencia afectada y se solicitan los datos del acta.
+  3. El CPU viejo (dañado) borra sus propiedades lógicas de red, se desactiva y pasa automáticamente a `'En Almacén (Para Reasignar)'` a la espera de la resolución final del Administrador (Baja definitiva `INF-BAJA` o Reuso `INF-RENOV`).
+
+#### Gestión de Usuarios (RBAC) y Rol de Invitado
+El Administrador Patrimonial cuenta con un submódulo "Usuarios RBAC" en su consola donde puede crear, modificar y suspender cuentas locales:
+* **Generación de Contraseñas:** Al dar de alta una nueva cuenta, el sistema autogenera una clave temporal aleatoria que se muestra una sola vez en pantalla.
+* **Rol Invitado:** Se incorpora el rol `'invitado'` para personal supervisor de la Contraloría u oficinas auditoras. Los usuarios con rol de invitado tienen acceso restringido de solo lectura: pueden inspeccionar la CMDB, ver el tablero Kanban y visualizar los reportes, pero los botones de asignación, regularización de comisiones y creación/edición de datos de inventario están completamente deshabilitados.
+
+---
+
 ## 3. Especificación de Despliegue y Orquestación Cloud (DevOps)
 
 La infraestructura de ENOCOMATIK está diseñada bajo principios nativos de la nube, utilizando contenedores ligeros orquestados en Kubernetes sobre AWS y despliegues automáticos (CI/CD).

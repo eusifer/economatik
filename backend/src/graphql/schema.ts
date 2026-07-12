@@ -4,6 +4,7 @@ export const typeDefs = gql`
   enum Rol {
     administrador
     tecnico
+    invitado
   }
 
   enum TicketStatus {
@@ -17,6 +18,15 @@ export const typeDefs = gql`
     id: ID!
     username: String!
     rol: Rol!
+  }
+
+  type UserAccount {
+    id: ID!
+    username: String!
+    rol: Rol!
+    nombre_completo: String!
+    activo: Boolean!
+    agencias: [String!]!
   }
 
   type Ticket {
@@ -38,6 +48,16 @@ export const typeDefs = gql`
     fecha_creacion: String!
   }
 
+  type ActaEntrega {
+    estado: String!
+    destinatario_nombre: String
+    destinatario_cargo: String
+    jefe_inmediato_nombre: String
+    agencia_destino: String
+    fecha_generacion: String
+    fecha_firma_recibida: String
+  }
+
   type ActivoTIC {
     id: ID!
     numero_serie: String!
@@ -55,6 +75,12 @@ export const typeDefs = gql`
     factura_adjunto_b64: String
     factura_adjunto_mime: String
     fecha_compra: String
+    estado_asignacion: String!
+    ubicacion_inicial: String!
+    destino_final: String
+    id_interno: String
+    informacion_adicional: String
+    acta_entrega: ActaEntrega
   }
 
   type InsumoEconomato {
@@ -93,6 +119,25 @@ export const typeDefs = gql`
     fecha_cierre_comision: String
     fecha_regularizacion: String
     comision_activa: Boolean!
+    numero_serie_activo: String
+    ubicacion_detalle: String
+  }
+
+  type MovimientoInsumo {
+    id: ID!
+    sku_codigo: String!
+    ean_codigo: String!
+    descripcion_articulo: String!
+    fecha_movimiento: String!
+    tipo_movimiento: String!
+    cantidad: Int!
+    stock_anterior: Int!
+    stock_nuevo: Int!
+    usuario_responsable: String!
+    tecnico_asignado: String
+    numero_serie_activo: String
+    ubicacion_agencia: String
+    observacion: String
   }
 
   type Query {
@@ -107,6 +152,11 @@ export const typeDefs = gql`
     countTicketsActivo(serie: String!): Int!
     getHistorialActivo(serie: String!): [Ticket!]!
     getKardexActivo(serie: String!): [MovimientoActivo!]!
+    
+    # Nuevas consultas para los módulos
+    listUsers: [UserAccount!]!
+    listTecnicos: [UserAccount!]!
+    listMovimientosInsumos: [MovimientoInsumo!]!
   }
 
   type Mutation {
@@ -128,7 +178,7 @@ export const typeDefs = gql`
 
     abrirComisionViaje(tecnicoId: ID!, eanCodigos: [String!]!): [CustodiaRepuesto!]!
     cerrarComisionViaje(tecnicoId: ID!): Boolean!
-    regularizarCustodia(tecnicoId: ID!, eanCodigo: String!, estado: String!): Boolean!
+    regularizarCustodia(tecnicoId: ID!, eanCodigo: String!, estado: String!, numeroSerieActivo: String, ubicacionDetalle: String): Boolean!
 
     renovacionTecnologica(serieViejo: String!, serieNuevo: String!): Boolean!
     
@@ -146,5 +196,82 @@ export const typeDefs = gql`
     ): Boolean!
     
     aprobarReutilizacion(serie_activo: String!): Boolean!
+    
+    # Nuevas mutaciones del Módulo de Usuarios
+    createUser(username: String!, nombreCompleto: String!, rol: String!, agencias: [String!]!): String!
+    updateUser(id: ID!, nombreCompleto: String!, rol: String!, activo: Boolean!, agencias: [String!]!): Boolean!
+    resetUserPassword(id: ID!): String!
+
+    # Nuevas mutaciones del Módulo de Asignaciones y Acta
+    asignarActivoAgencia(
+      numeroSerie: String!
+      destinoFinal: String!
+      destinatarioNombre: String!
+      destinatarioCargo: String!
+      jefeInmediatoNombre: String!
+    ): Boolean!
+    
+    marcarActaFirmada(numeroSerie: String!): Boolean!
+
+    # Nuevas mutaciones para Traslado de Equipos (CMDB & Logística)
+    trasladarActivoAgencia(
+      numeroSerie: String!
+      destinoFinal: String!
+      destinatarioNombre: String!
+      destinatarioCargo: String!
+      jefeInmediatoNombre: String!
+    ): Boolean!
+
+    trasladarActivoTaller(
+      numeroSerie: String!
+    ): Boolean!
+
+    confirmarRecepcionTraslado(
+      numeroSerie: String!
+    ): Boolean!
+
+    # Nueva mutación para Ingreso Simplificado
+    registrarIngresoActivo(
+      ubicacion_inicial: String!
+      marca: String!
+      modelo: String!
+      tipo_equipo: String!
+      numero_serie: String
+      informacion_adicional: String
+      factura_referencia: String
+      factura_adjunto_b64: String
+      factura_adjunto_mime: String
+    ): ActivoTIC!
+
+    updateActivo(
+      id: ID!
+      tipo_equipo: String!
+      marca: String!
+      modelo: String!
+      numero_serie: String!
+      ip_asignada: String
+      informacion_adicional: String
+    ): Boolean!
+
+    # Nueva mutación para Registro de Uso de Insumos/Repuestos
+    registrarUsoInsumo(
+      skuCodigo: String!
+      numeroSerieActivo: String!
+      ubicacionDetalle: String!
+      cantidad: Int!
+    ): Boolean!
+
+    # Nueva mutación para Ajuste de Inventario de Insumos/Repuestos
+    ajustarStockInsumo(
+      skuCodigo: String!
+      cantidadNueva: Int!
+      observacion: String!
+    ): InsumoEconomato!
+
+    # Mutación administrativa para depurar base de datos de pruebas (puesta en producción)
+    limpiarDatosPrueba: Boolean!
+    
+    # Mutación administrativa para sembrar datos semilla (bajo demanda)
+    sembrarDatosIniciales: Boolean!
   }
 `;

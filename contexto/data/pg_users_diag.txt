@@ -1,0 +1,15 @@
+PG USERS DIAGNOSTIC:
+- User: admin
+  Role: administrador
+  Name: Administrador Patrimonial
+  Active: true
+  Matches 'Keiko@2026'? false
+  Matches 'admin123'? true
+
+- User: rocruzc
+  Role: tecnico
+  Name: roger cruz
+  Active: true
+  Matches 'Keiko@2026'? false
+  Matches 'admin123'? false
+

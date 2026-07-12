@@ -113,7 +113,7 @@ export default function HomePage() {
                 <h2 className="text-xl font-bold text-white text-center flex items-center justify-center gap-2">
                   <Key className="w-5 h-5 text-blue-500" /> Ingreso al Sistema
                 </h2>
-                <p className="text-xs text-slate-500 text-center mt-1">Credenciales corporativas de la Municipalidad</p>
+                <p className="text-xs text-slate-500 text-center mt-1">Credenciales corporativas de la CMAC Tacna</p>
               </div>
 
               {errorMsg && (
@@ -213,7 +213,13 @@ export default function HomePage() {
           <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <LayoutDashboard className="w-6 h-6 text-blue-400" /> Módulos de Flujo Operativo
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Módulo 0: Dashboard de Stock y Auditoría */}
+            <Link href="/dashboard" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">📊 Dashboard Stock</h3>
+              <p className="text-sm text-slate-400 mt-2">Consolidado de stock de hardware por sedes de la Caja Tacna e identificación automatizada de inconsistencias ITIL.</p>
+            </Link>
+
             {/* Módulo 1: Triaje Inbound (Acceso para ambos) */}
             <Link href="/triaje" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
               <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">1. Triaje Inbound</h3>
@@ -226,24 +232,68 @@ export default function HomePage() {
               <p className="text-sm text-slate-400 mt-2">Monitoreo y arrastre de solicitudes bajo los estados To Do, In Progress, En Tránsito a Taller y Done.</p>
             </Link>
 
-            {/* Módulo 3: Custodia en Ruta (Acceso para ambos) */}
+            {/* Módulo 3: Economato - Registro de uso (Acceso para ambos) */}
             <Link href="/custodia" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
-              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">3. Custodia en Ruta</h3>
-              <p className="text-sm text-slate-400 mt-2">Control de repuestos retirados, cronómetro de Aging de 48 horas y middleware de bloqueo.</p>
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">3. Economato - Registro de uso</h3>
+              <p className="text-sm text-slate-400 mt-2">Control de repuestos retirados, cronómetro de Aging de 48 horas y regularización de uso en caliente.</p>
             </Link>
 
-            {/* Módulo 4: Administración (Solo Administrador - Control RBAC en Interfaz) */}
+            {/* Módulo 4: Asignación de Activos (Acceso para todos) */}
+            <Link href="/asignaciones" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">4. Asignaciones y Actas</h3>
+              <p className="text-sm text-slate-400 mt-2">Control de destino final de equipos TIC, actas de cargo y firmas físicas en la CMDB.</p>
+            </Link>
+
+            {/* Módulo 5: Administración (Solo Administrador - Control RBAC en Interfaz) */}
             {user.rol === 'administrador' ? (
               <Link href="/admin" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
-                <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">4. Administración</h3>
+                <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">5. Administración</h3>
                 <p className="text-sm text-slate-400 mt-2">Carga masiva de compras, informes INF-BAJA/INF-RENOV, reuso de CPU y descarga Excel.</p>
               </Link>
             ) : (
               <div className="p-6 rounded-2xl bg-slate-950/20 border border-slate-900 opacity-40 cursor-not-allowed">
-                <h3 className="font-bold text-lg text-slate-500">4. Administración</h3>
+                <h3 className="font-bold text-lg text-slate-500">5. Administración</h3>
                 <p className="text-sm text-slate-600 mt-2">Acceso restringido. Requiere privilegios de Administrador Patrimonial.</p>
               </div>
             )}
+
+            {/* Módulo 6: Reportes ITIL */}
+            <Link href="/reportes" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">📈 Reportes ITIL</h3>
+              <p className="text-sm text-slate-400 mt-2">Métricas de Acuerdo de Niveles de Servicio (SLA), MTTR, First Contact Resolution y descarga de reportes Excel.</p>
+            </Link>
+
+            {/* Módulo 9: Kardex y Trazabilidad */}
+            <Link href="/kardex" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+              <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">📋 Kardex y Trazabilidad</h3>
+              <p className="text-sm text-slate-400 mt-2">Consulta del historial de movimientos, comprobantes de adición/baja y actas de asignación por número de serie.</p>
+            </Link>
+
+             {/* Módulo 7: Carga Masiva (Solo Administrador) */}
+             {user.rol === 'administrador' ? (
+               <Link href="/carga-masiva" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+                 <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">💾 Carga Masiva</h3>
+                 <p className="text-sm text-slate-400 mt-2">Poblamiento masivo de inventario mediante formatos específicos (CPUs, Impresoras) con validación en vivo.</p>
+               </Link>
+             ) : (
+               <div className="p-6 rounded-2xl bg-slate-950/20 border border-slate-900 opacity-40 cursor-not-allowed">
+                 <h3 className="font-bold text-lg text-slate-500">💾 Carga Masiva</h3>
+                 <p className="text-sm text-slate-600 mt-2">Acceso restringido. Requiere privilegios de Administrador Patrimonial.</p>
+               </div>
+             )}
+
+             {/* Módulo 8: Registro de Compras (Solo Administrador) */}
+             {user.rol === 'administrador' ? (
+               <Link href="/compras" className="group p-6 rounded-2xl bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/40 transition">
+                 <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition">🛍️ Registro de Compras</h3>
+                 <p className="text-sm text-slate-400 mt-2">Alta manual de compras por factura con escaneo PDF adjunto y consulta de historial cronológico.</p>
+               </Link>
+             ) : (
+               <div className="p-6 rounded-2xl bg-slate-950/20 border border-slate-900 opacity-40 cursor-not-allowed">
+                 <h3 className="font-bold text-lg text-slate-500">🛍️ Registro de Compras</h3>
+                 <p className="text-sm text-slate-600 mt-2">Acceso restringido. Requiere privilegios de Administrador Patrimonial.</p>
+               </div>
+             )}
           </div>
         </section>
       )}

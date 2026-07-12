@@ -16,8 +16,25 @@ export const initializePostgreSQL = async () => {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         username VARCHAR(100) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
-        rol VARCHAR(20) NOT NULL CHECK (rol IN ('administrador', 'tecnico'))
+        rol VARCHAR(20) NOT NULL,
+        nombre_completo VARCHAR(255) NOT NULL DEFAULT 'Usuario del Sistema',
+        activo BOOLEAN NOT NULL DEFAULT TRUE
       );
+    `);
+
+    // Migración del CHECK constraint de rol para incluir 'invitado'
+    await client.query(`
+      ALTER TABLE usuarios_sistema DROP CONSTRAINT IF EXISTS usuarios_sistema_rol_check;
+      ALTER TABLE usuarios_sistema ADD CONSTRAINT usuarios_sistema_rol_check
+        CHECK (rol IN ('administrador', 'tecnico', 'invitado'));
+    `);
+
+    // Migración para añadir nuevas columnas a usuarios_sistema si ya existía antes
+    await client.query(`
+      ALTER TABLE usuarios_sistema ADD COLUMN IF NOT EXISTS nombre_completo VARCHAR(255) NOT NULL DEFAULT 'Usuario del Sistema';
+    `);
+    await client.query(`
+      ALTER TABLE usuarios_sistema ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE;
     `);
 
     // 2. Secuencia para llave incremental de tickets
@@ -81,6 +98,23 @@ export const initializePostgreSQL = async () => {
       );
     `);
 
+    // Migración para añadir campos de equipo y sede de uso a custodia_repuestos
+    await client.query(`
+      ALTER TABLE custodia_repuestos ADD COLUMN IF NOT EXISTS numero_serie_activo VARCHAR(100) DEFAULT NULL;
+    `);
+    await client.query(`
+      ALTER TABLE custodia_repuestos ADD COLUMN IF NOT EXISTS ubicacion_detalle VARCHAR(100) DEFAULT NULL;
+    `);
+
+    // 6. Tabla de Agencias a Cargo de Usuarios (Relación uno-a-muchos)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS usuario_agencias (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        usuario_id UUID NOT NULL REFERENCES usuarios_sistema(id) ON DELETE CASCADE,
+        agencia_id VARCHAR(100) NOT NULL
+      );
+    `);
+
     // Insertar usuarios semilla por defecto si no existen
     const userCount = await client.query('SELECT COUNT(*) FROM usuarios_sistema;');
     if (parseInt(userCount.rows[0].count) === 0) {
@@ -94,9 +128,9 @@ export const initializePostgreSQL = async () => {
       const techHash = await bcrypt.hash(tecnicoPassword, 12);
 
       await client.query(`
-        INSERT INTO usuarios_sistema (username, password_hash, rol) VALUES
-        ('admin', $1, 'administrador'),
-        ('tecnico1', $2, 'tecnico');
+        INSERT INTO usuarios_sistema (username, password_hash, rol, nombre_completo) VALUES
+        ('admin', $1, 'administrador', 'Administrador Patrimonial'),
+        ('tecnico1', $2, 'tecnico', 'Técnico de Campo 1');
       `, [adminHash, techHash]);
 
       // Las contraseñas generadas se imprimen UNA SOLA VEZ para que el administrador
